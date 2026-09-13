@@ -9,11 +9,12 @@
 
 <style scoped>
 table :deep(thead th) {
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem 0.75rem 0.625rem;
   text-align: left;
   font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--color-zinc-400);
+  font-weight: 600;
+  color: var(--color-zinc-500);
+  border-bottom: 1px solid var(--color-zinc-700);
 }
 table :deep(tbody td) {
   padding: 0.625rem 0.75rem;

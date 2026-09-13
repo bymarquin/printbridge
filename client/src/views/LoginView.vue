@@ -34,7 +34,7 @@ async function entrar() {
     <Card class="w-full max-w-sm text-center">
       <h1 class="flex items-center justify-center gap-2 text-2xl font-bold text-white"><Printer :size="24" /> PrintBridge</h1>
       <p class="mt-1 text-sm text-zinc-400">Painel do dono — cole a chave owner</p>
-      <Input v-model="key" type="password" placeholder="OWNER_SETUP_KEY" class="mt-4" @keyup.enter="entrar" />
+      <Input v-model="key" type="password" placeholder="Sua chave owner" class="mt-4" @keyup.enter="entrar" />
       <Button class="mt-3 w-full" @click="entrar">Entrar</Button>
     </Card>
   </main>

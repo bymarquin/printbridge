@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Bell, CircleUserRound, LayoutDashboard, ListOrdered, Plug, Printer, Store } from 'lucide-vue-next'
+import { Bell, BookOpen, CircleUserRound, LayoutDashboard, ListOrdered, Plug, Printer, Store } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import { useSession } from '../stores/session'
 
@@ -13,6 +13,7 @@ const links = [
   { name: 'impressoras', label: 'Impressoras', icon: Printer },
   { name: 'fila', label: 'Fila', icon: ListOrdered },
   { name: 'integracoes', label: 'Integrações', icon: Plug },
+  { name: 'docs', label: 'Docs', icon: BookOpen },
 ] as const
 
 function sair() {

@@ -56,7 +56,7 @@ onMounted(() => void carregar().catch(() => {}))
   <div class="space-y-4">
     <Card title="Webhooks">
       <div class="flex items-end gap-2">
-        <Input v-model="url" label="URL https do sistema" placeholder="https://seu-sistema.com/hooks/print" class="grow" @keyup.enter="assinar" />
+        <Input v-model="url" label="URL https do sistema" placeholder="URL do seu sistema" class="grow" @keyup.enter="assinar" />
         <Button @click="assinar">Assinar tudo</Button>
       </div>
     </Card>

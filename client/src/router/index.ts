@@ -31,6 +31,10 @@ const router = createRouter({
           path: 'integracoes', name: 'integracoes', component: () => import('../views/IntegracoesView.vue'),
           meta: { title: 'Integrações', subtitle: 'Webhooks e API.' },
         },
+        {
+          path: 'docs', name: 'docs', component: () => import('../views/DocsView.vue'),
+          meta: { title: 'Docs', subtitle: 'Guia de integração em 5 minutos.' },
+        },
       ],
     },
   ],

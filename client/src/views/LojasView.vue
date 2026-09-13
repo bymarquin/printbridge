@@ -59,7 +59,7 @@ onMounted(() => void carregar())
   <div class="space-y-4">
     <Card>
       <div class="flex items-end gap-2">
-        <Input v-model="label" label="Nome da loja" placeholder="Ex.: Embraza Gringos" class="grow" @keyup.enter="enroll" />
+        <Input v-model="label" label="Nome da loja" placeholder="Nome da sua loja" class="grow" @keyup.enter="enroll" />
         <Button @click="enroll">Cadastrar</Button>
       </div>
     </Card>

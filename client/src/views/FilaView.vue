@@ -86,7 +86,7 @@ onUnmounted(() => { window.clearInterval(timer); ws?.close() })
     </div>
     <Card v-if="lojaWs && !temToken()">
       <div class="flex items-end gap-2">
-        <Input v-model="tokenAvulso" label="Token da loja (criada fora do painel)" placeholder="pb_…" type="password" class="grow" />
+        <Input v-model="tokenAvulso" label="Token da loja (criada fora do painel)" placeholder="Token da sua loja" type="password" class="grow" />
         <Button @click="salvarToken">Salvar</Button>
       </div>
     </Card>
