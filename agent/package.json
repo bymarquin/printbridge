@@ -1,0 +1,73 @@
+{
+  "name": "@printbridge/agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PrintBridge Agent (Windows) — core headless desacoplado do Electron",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "lint": "tsc --noEmit",
+    "electron": "electron dist/shell/electron-entry.js",
+    "dist:win": "electron-builder --win nsis",
+    "winget:bump": "node scripts/winget-bump.mjs"
+  },
+  "main": "dist/shell/electron-entry.js",
+  "build": {
+    "appId": "br.printbridge.agent",
+    "productName": "PrintBridge Agent",
+    "files": [
+      "dist/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "PrintBridge-Agent-${version}-setup.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PrintBridge Agent",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "bymarquin",
+      "repo": "printbridge",
+      "releaseType": "release"
+    }
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "electron-log": "^5.4.4",
+    "electron-updater": "^6.8.9",
+    "pdf-to-printer": "^5.8.1",
+    "ws": "^8.18.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.7.0",
+    "electron": "^44.3.0",
+    "electron-builder": "^26.15.3",
+    "png-to-ico": "^3.0.2",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.5"
+  },
+  "allowScripts": {
+    "better-sqlite3@11.10.0": true,
+    "esbuild@0.28.2": true,
+    "esbuild@0.21.5": true,
+    "fsevents@2.3.3": true,
+    "electron-winstaller@5.4.0": true
+  }
+}

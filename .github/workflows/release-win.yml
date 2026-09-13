@@ -1,0 +1,31 @@
+name: release-win
+
+# Gera o instalador Windows e publica no GitHub Release.
+# Como usar: git tag v0.1.0 && git push origin v0.1.0
+# O .exe publicado alimenta o download direto, o winget e o auto-update.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: agent/package-lock.json
+      - run: npm ci
+      - run: npm run dist:win -- --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

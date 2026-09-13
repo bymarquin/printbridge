@@ -1,0 +1,224 @@
+import { Router } from "express";
+import { randomBytes } from "node:crypto";
+import { z } from "zod";
+import { getDb } from "../infra/db.js";
+import {
+  InvalidTransitionError,
+  JobConflictError,
+  JobNotFoundError,
+  PayloadTooLargeError,
+  PrintJobRepository,
+} from "../infra/printJobRepository.js";
+import { createAgent, hashToken, safeEqualString } from "../infra/tokenStore.js";
+import { agentAuth, type AuthedRequest } from "../middleware/auth.js";
+import type { PrintProvider } from "../services/provider.js";
+
+const enqueueSchema = z.object({
+  idempotencyKey: z.string().min(8).max(128),
+  orderId: z.string().max(128).optional().nullable(),
+  payloadType: z.enum(["pdf", "raw"]),
+  payloadBase64: z.string().min(1).max(7_000_000),
+  printerId: z.string().min(1).max(256),
+  copies: z.number().int().min(1).max(10).default(1),
+  paperWidth: z.number().int().refine((v) => v === 58 || v === 80, "paperWidth deve ser 58 ou 80").default(80),
+});
+
+const statusSchema = z.object({
+  status: z.enum(["received", "printing", "completed", "failed", "pending"]),
+  errorMessage: z.string().max(2000).optional().nullable(),
+});
+
+const printersSyncSchema = z.object({
+  printers: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(256),
+        isDefault: z.boolean().default(false),
+        status: z.enum(["ready", "offline", "error"]).default("ready"),
+      }),
+    )
+    .min(1)
+    .max(32),
+});
+
+const OFFLINE_AFTER_MS = 90_000;
+
+export function printAgentRouter(provider: PrintProvider): Router {
+  const r = Router();
+  const repo = new PrintJobRepository();
+
+  // Enroll — protegido por chave owner (B1: comparação constante).
+  r.post("/enroll", (req, res) => {
+    const setupKey = process.env.OWNER_SETUP_KEY;
+    const provided = req.header("x-setup-key") ?? "";
+    if (!setupKey || !safeEqualString(provided, setupKey)) {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+    const label = z.object({ label: z.string().min(1).max(128) })
+      .safeParse(req.body);
+    if (!label.success) {
+      res.status(400).json({ error: label.error.flatten() });
+      return;
+    }
+    const token = `pb_${randomBytes(24).toString("hex")}`;
+    const agent = createAgent(label.data.label, hashToken(token));
+    res.status(201).json({ agentId: agent.id, token });
+  });
+
+  r.use(agentAuth);
+
+  // Enfileirar (idempotente por idempotencyKey).
+  // Nota: mesma key + payload diferente retorna o job original (dedupe intencional).
+  r.post("/jobs", (req, res) => {
+    const parsed = enqueueSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
+      return;
+    }
+    try {
+      const { job, deduplicated } = provider.submit(parsed.data);
+      res.status(deduplicated ? 200 : 201).json({ job, deduplicated });
+    } catch (e) {
+      // B2: nunca vaza mensagem interna crua — mapeia conhecidas, resto é genérico.
+      console.error("[print-agent] POST /jobs", e);
+      if (e instanceof PayloadTooLargeError) {
+        res.status(422).json({ error: e.message });
+        return;
+      }
+      res.status(500).json({ error: "internal error" });
+    }
+  });
+
+  // Polling fallback (10s no agente)
+  r.get("/jobs", (req, res) => {
+    const limit = Math.min(Number(req.query.limit ?? 20), 50);
+    res.json({ jobs: repo.listPending(Number.isFinite(limit) ? limit : 20) });
+  });
+
+  r.get("/jobs/:id", (req, res) => {
+    const job = repo.getById(req.params.id);
+    if (!job) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+    res.json({ job });
+  });
+
+  // Claim atômico — 404 se não existe, 409 se já reivindicado.
+  r.post("/jobs/:id/claim", (req, res) => {
+    if (!repo.getById(req.params.id)) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+    const claimed = repo.claim(req.params.id);
+    if (!claimed) {
+      res.status(409).json({ error: "job já reivindicado ou estado inválido" });
+      return;
+    }
+    res.json({ job: claimed });
+  });
+
+  r.patch("/jobs/:id", (req, res) => {
+    const parsed = statusSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
+      return;
+    }
+    try {
+      // Claim implícito: pending->received via PATCH usa o mesmo CAS do claim().
+      if (parsed.data.status === "received") {
+        const current = repo.getById(req.params.id);
+        if (!current) {
+          res.status(404).json({ error: "not found" });
+          return;
+        }
+        if (current.status === "pending") {
+          const claimed = repo.claim(current.id);
+          if (!claimed) {
+            res.status(409).json({ error: "race: job já reivindicado" });
+            return;
+          }
+          res.json({ job: claimed });
+          return;
+        }
+      }
+      const job = repo.transition(
+        req.params.id,
+        parsed.data.status,
+        parsed.data.errorMessage ?? null,
+      );
+      res.json({ job });
+    } catch (e) {
+      // B2: mapeia erros de domínio, resto é genérico + log.
+      if (e instanceof JobNotFoundError) {
+        res.status(404).json({ error: "not found" });
+        return;
+      }
+      if (e instanceof JobConflictError) {
+        res.status(409).json({ error: e.message });
+        return;
+      }
+      if (e instanceof InvalidTransitionError) {
+        res.status(422).json({ error: e.message });
+        return;
+      }
+      console.error("[print-agent] PATCH /jobs/:id", e);
+      res.status(500).json({ error: "internal error" });
+    }
+  });
+
+  // Sync impressoras + heartbeat
+  r.post("/printers/sync", (req: AuthedRequest, res) => {
+    const parsed = printersSyncSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
+      return;
+    }
+    const db = getDb();
+    const now = new Date().toISOString();
+    const tx = db.transaction(() => {
+      for (const p of parsed.data.printers) {
+        const id = `${req.agentId}:${p.name}`;
+        db.prepare(
+          `INSERT INTO printers (id, agent_id, name, is_default, status, last_seen_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             is_default = excluded.is_default,
+             status = excluded.status,
+             last_seen_at = excluded.last_seen_at`,
+        ).run(id, req.agentId!, p.name, p.isDefault ? 1 : 0, p.status, now);
+      }
+      if (parsed.data.printers.some((p) => p.isDefault)) {
+        // Garante um único default por agente.
+        const def = parsed.data.printers.find((p) => p.isDefault)!.name;
+        db.prepare(
+          `UPDATE printers SET is_default = CASE WHEN name = ? THEN 1 ELSE 0 END
+           WHERE agent_id = ?`,
+        ).run(def, req.agentId!);
+      }
+    });
+    tx();
+    res.json({ ok: true, synced: parsed.data.printers.length });
+  });
+
+  r.get("/printers", (req: AuthedRequest, res) => {
+    const db = getDb();
+    const rows = db
+      .prepare("SELECT id, name, is_default as isDefault, status, last_seen_at as lastSeenAt FROM printers WHERE agent_id = ?")
+      .all(req.agentId!) as Array<{
+        id: string; name: string; isDefault: number; status: string; lastSeenAt: string;
+      }>;
+    const now = Date.now();
+    const printers = rows.map((p) => ({
+      ...p,
+      isDefault: p.isDefault === 1,
+      // Offline derivado do heartbeat (90s sem sync) — mesma semântica do selectedState().
+      derivedStatus:
+        now - Date.parse(p.lastSeenAt) > OFFLINE_AFTER_MS ? "offline" : p.status,
+    }));
+    res.json({ printers });
+  });
+
+  return r;
+}
