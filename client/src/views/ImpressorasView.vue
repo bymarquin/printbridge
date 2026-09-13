@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { RefreshCw } from 'lucide-vue-next'
 import { api, type Printer } from '../lib/api'
 import { useSession } from '../stores/session'
-import StatusBadge from '../components/ui/StatusBadge.vue'
 import Button from '../components/ui/Button.vue'
 import Card from '../components/ui/Card.vue'
+import Empty from '../components/ui/Empty.vue'
 import Select from '../components/ui/Select.vue'
+import StatusBadge from '../components/ui/StatusBadge.vue'
+import Table from '../components/ui/Table.vue'
 
 const session = useSession()
 const printers = ref<Printer[]>([])
@@ -22,25 +25,25 @@ onMounted(() => void carregar())
 </script>
 
 <template>
-  <main class="min-h-screen bg-zinc-950 p-6 text-zinc-100">
-    <div class="flex items-center gap-4">
-      <h1 class="text-2xl font-bold text-white">🖨️ Impressoras</h1>
+  <div class="space-y-4">
+    <div class="flex items-center gap-2">
       <Select v-model="filtro" :options="[{ value: '', label: 'Todas as lojas' }, ...lojas]" />
-      <Button variant="ghost" @click="carregar">↻</Button>
+      <Button variant="ghost" @click="carregar" title="Recarregar"><RefreshCw :size="16" /></Button>
     </div>
-    <Card class="mt-4">
-      <table class="w-full text-sm">
-        <thead><tr class="text-left text-zinc-400"><th class="py-2">Loja</th><th>Impressora</th><th>Padrão</th><th>Status</th><th>Vista</th></tr></thead>
+    <Card>
+      <Table>
+        <thead><tr><th>Loja</th><th>Impressora</th><th>Padrão</th><th>Status</th><th>Vista</th></tr></thead>
         <tbody>
-          <tr v-for="p in lista" :key="p.agent + p.name" class="border-t border-zinc-800">
-            <td class="py-2">{{ p.agent }}</td>
+          <tr v-if="lista.length === 0"><td colspan="5"><Empty>Nenhuma impressora sincronizada.</Empty></td></tr>
+          <tr v-for="p in lista" :key="p.agent + p.name">
+            <td>{{ p.agent }}</td>
             <td class="font-semibold text-white">{{ p.name }}</td>
-            <td>{{ p.isDefault ? '⭐' : '' }}</td>
+            <td><span v-if="p.isDefault" class="inline-flex h-5 items-center rounded-full bg-zinc-800 px-2.5 text-xs font-medium text-zinc-300">Padrão</span></td>
             <td><StatusBadge :status="p.derivedStatus" /></td>
             <td class="text-zinc-400">{{ new Date(p.lastSeenAt).toLocaleString('pt-BR') }}</td>
           </tr>
         </tbody>
-      </table>
+      </Table>
     </Card>
-  </main>
+  </div>
 </template>

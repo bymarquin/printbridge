@@ -1,0 +1,25 @@
+<script setup lang="ts">
+</script>
+
+<template>
+  <table class="w-full text-sm">
+    <slot />
+  </table>
+</template>
+
+<style scoped>
+table :deep(thead th) {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-zinc-400);
+}
+table :deep(tbody td) {
+  padding: 0.625rem 0.75rem;
+  border-top: 1px solid var(--color-zinc-800);
+}
+table :deep(tbody tr:first-child td) {
+  border-top: 0;
+}
+</style>

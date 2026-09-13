@@ -1,11 +1,8 @@
 <script setup lang="ts">
-import { useRoute } from 'vue-router'
-import AppShell from './components/AppShell.vue'
-
-const route = useRoute()
+import Toaster from './components/Toaster.vue'
 </script>
 
 <template>
-  <AppShell v-if="route.meta.auth"><RouterView /></AppShell>
-  <RouterView v-else />
+  <RouterView />
+  <Toaster />
 </template>

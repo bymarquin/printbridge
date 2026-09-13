@@ -1,20 +1,37 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import LoginView from '../views/LoginView.vue'
-import DashboardView from '../views/DashboardView.vue'
-import LojasView from '../views/LojasView.vue'
-import ImpressorasView from '../views/ImpressorasView.vue'
-import FilaView from '../views/FilaView.vue'
-import IntegracoesView from '../views/IntegracoesView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    { path: '/login', name: 'login', component: LoginView },
-    { path: '/', name: 'dashboard', component: DashboardView, meta: { auth: true } },
-    { path: '/lojas', name: 'lojas', component: LojasView, meta: { auth: true } },
-    { path: '/impressoras', name: 'impressoras', component: ImpressorasView, meta: { auth: true } },
-    { path: '/fila', name: 'fila', component: FilaView, meta: { auth: true } },
-    { path: '/integracoes', name: 'integracoes', component: IntegracoesView, meta: { auth: true } },
+    { path: '/login', name: 'login', component: () => import('../views/LoginView.vue') },
+    { path: '/', redirect: '/app' },
+    {
+      path: '/app',
+      component: () => import('../layouts/MainLayout.vue'),
+      meta: { auth: true },
+      children: [
+        {
+          path: '', name: 'dashboard', component: () => import('../views/DashboardView.vue'),
+          meta: { title: 'Dashboard', subtitle: 'Panorama da operação.' },
+        },
+        {
+          path: 'lojas', name: 'lojas', component: () => import('../views/LojasView.vue'),
+          meta: { title: 'Lojas', subtitle: 'Cadastre e gerencie os estabelecimentos.' },
+        },
+        {
+          path: 'impressoras', name: 'impressoras', component: () => import('../views/ImpressorasView.vue'),
+          meta: { title: 'Impressoras', subtitle: 'Status por loja.' },
+        },
+        {
+          path: 'fila', name: 'fila', component: () => import('../views/FilaView.vue'),
+          meta: { title: 'Fila', subtitle: 'Jobs em tempo real.' },
+        },
+        {
+          path: 'integracoes', name: 'integracoes', component: () => import('../views/IntegracoesView.vue'),
+          meta: { title: 'Integrações', subtitle: 'Webhooks e API.' },
+        },
+      ],
+    },
   ],
 })
 

@@ -5,8 +5,8 @@ const model = defineModel<string>({ required: true })
 
 <template>
   <div>
-    <label v-if="label" class="mb-1 block text-xs text-zinc-400">{{ label }}</label>
+    <label v-if="label" class="mb-1.5 block text-xs font-medium text-zinc-400">{{ label }}</label>
     <input v-model="model" :type="type ?? 'text'" :placeholder="placeholder"
-      class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-white" />
+      class="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-white" />
   </div>
 </template>

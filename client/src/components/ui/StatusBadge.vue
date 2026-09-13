@@ -14,5 +14,5 @@ const cls = computed(() =>
 </script>
 
 <template>
-  <span :class="'rounded-full px-2 py-0.5 text-xs ' + cls">{{ status }}</span>
+  <span :class="'inline-flex h-5 items-center rounded-full px-2.5 text-xs font-medium ' + cls">{{ status }}</span>
 </template>
