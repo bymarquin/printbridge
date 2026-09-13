@@ -12,6 +12,25 @@ import {
 import { createAgent, hashToken, safeEqualString } from "../infra/tokenStore.js";
 import { agentAuth, type AuthedRequest } from "../middleware/auth.js";
 import type { PrintProvider } from "../services/provider.js";
+import {
+  createWebhook,
+  deleteWebhook,
+  deliverDue,
+  dispatchJobEvent,
+  listWebhooks,
+  type JobEvent,
+} from "../services/webhooks.js";
+
+/** Dispara webhooks sem bloquear a resposta (log + retry ficam no sweeper). */
+function notify(job: Parameters<typeof dispatchJobEvent>[0], event: JobEvent): void {
+  try {
+    dispatchJobEvent(job, event);
+  } catch (e) {
+    console.error("[webhooks] dispatch", (e as Error).message);
+    return;
+  }
+  deliverDue().catch((e) => console.error("[webhooks] deliver", (e as Error).message));
+}
 
 const enqueueSchema = z.object({
   idempotencyKey: z.string().min(8).max(128),
@@ -39,6 +58,15 @@ const printersSyncSchema = z.object({
     )
     .min(1)
     .max(32),
+});
+
+const webhookSchema = z.object({
+  url: z.string().url().max(2048),
+  events: z
+    .array(z.enum(["job.created", "job.received", "job.printing", "job.completed", "job.failed", "job.requeued"]))
+    .max(6)
+    .optional(),
+  printerIds: z.array(z.string().min(1).max(256)).max(32).optional(),
 });
 
 const OFFLINE_AFTER_MS = 90_000;
@@ -78,6 +106,7 @@ export function printAgentRouter(provider: PrintProvider): Router {
     }
     try {
       const { job, deduplicated } = provider.submit(parsed.data);
+      if (!deduplicated) notify(job, "job.created");
       res.status(deduplicated ? 200 : 201).json({ job, deduplicated });
     } catch (e) {
       // B2: nunca vaza mensagem interna crua — mapeia conhecidas, resto é genérico.
@@ -116,6 +145,7 @@ export function printAgentRouter(provider: PrintProvider): Router {
       res.status(409).json({ error: "job já reivindicado ou estado inválido" });
       return;
     }
+    notify(claimed, "job.received");
     res.json({ job: claimed });
   });
 
@@ -139,6 +169,7 @@ export function printAgentRouter(provider: PrintProvider): Router {
             res.status(409).json({ error: "race: job já reivindicado" });
             return;
           }
+          notify(claimed, "job.received");
           res.json({ job: claimed });
           return;
         }
@@ -148,6 +179,7 @@ export function printAgentRouter(provider: PrintProvider): Router {
         parsed.data.status,
         parsed.data.errorMessage ?? null,
       );
+      notify(job, job.status === "pending" ? "job.requeued" : `job.${job.status}` as JobEvent);
       res.json({ job });
     } catch (e) {
       // B2: mapeia erros de domínio, resto é genérico + log.
@@ -218,6 +250,33 @@ export function printAgentRouter(provider: PrintProvider): Router {
         now - Date.parse(p.lastSeenAt) > OFFLINE_AFTER_MS ? "offline" : p.status,
     }));
     res.json({ printers });
+  });
+
+  // Webhooks de status para sistemas web (HMAC em x-printbridge-signature).
+  r.post("/webhooks", async (req, res) => {
+    const parsed = webhookSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
+      return;
+    }
+    try {
+      const wh = await createWebhook(parsed.data);
+      res.status(201).json({ webhook: wh });
+    } catch (e) {
+      res.status(422).json({ error: (e as Error).message });
+    }
+  });
+
+  r.get("/webhooks", (_req, res) => {
+    res.json({ webhooks: listWebhooks() });
+  });
+
+  r.delete("/webhooks/:id", (req, res) => {
+    if (!deleteWebhook(req.params.id)) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+    res.status(204).end();
   });
 
   return r;

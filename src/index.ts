@@ -14,7 +14,7 @@ const broadcast = (jobId: string) => {
   }
 };
 
-const app = createApp(broadcast);
+const app = createApp(broadcast, { webhookSweeper: true });
 const server = createServer(app);
 
 const wss = new WebSocketServer({ server, path: "/print-agent/ws" });
