@@ -1,0 +1,52 @@
+name: deploy
+
+# Todo push na main sobe backend + client novos na VPS, sozinho.
+# Só mexe no printbridge-api via PM2 (nenhum sudo, nenhum outro
+# processo/serviço da VPS é tocado). Falha em qualquer passo aborta
+# o resto (script_stop + set -euo pipefail).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH (git pull + build backend + restart printbridge-api + build client)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 10m
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd ~/var/www/printbridge
+            git pull --ff-only origin main
+            npm ci
+            npm run build
+            pm2 restart printbridge-api
+            cd client
+            npm ci
+            npm run build-only -- --base=/app/
+
+      - name: Verificar health da API
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 https://printbridge.duckdns.org/health)
+          echo "GET /health -> $code"
+          test "$code" = "200"
+
+      - name: Verificar client em /app/
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 https://printbridge.duckdns.org/app/)
+          echo "GET /app/ -> $code"
+          test "$code" = "200"
