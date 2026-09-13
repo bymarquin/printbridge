@@ -8,16 +8,16 @@ const router = useRouter()
 const session = useSession()
 
 const links = [
-  { to: '/app', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/app/lojas', label: 'Lojas', icon: Store },
-  { to: '/app/impressoras', label: 'Impressoras', icon: Printer },
-  { to: '/app/fila', label: 'Fila', icon: ListOrdered },
-  { to: '/app/integracoes', label: 'Integrações', icon: Plug },
-]
+  { name: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { name: 'lojas', label: 'Lojas', icon: Store },
+  { name: 'impressoras', label: 'Impressoras', icon: Printer },
+  { name: 'fila', label: 'Fila', icon: ListOrdered },
+  { name: 'integracoes', label: 'Integrações', icon: Plug },
+] as const
 
 function sair() {
   session.logout()
-  void router.push('/login')
+  void router.push({ name: 'login' })
 }
 </script>
 
@@ -44,7 +44,7 @@ function sair() {
       </header>
 
       <nav class="flex items-center justify-center gap-2 overflow-x-auto rounded-xl bg-zinc-900 px-4 py-3">
-        <RouterLink v-for="l in links" :key="l.to" :to="l.to"
+        <RouterLink v-for="l in links" :key="l.name" :to="{ name: l.name }"
           active-class="bg-zinc-800 text-white"
           class="flex flex-col items-center gap-1 rounded-lg px-5 py-2 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-white">
           <component :is="l.icon" :size="22" />

@@ -18,7 +18,7 @@ async function entrar() {
   try {
     await api.agents(key.value.trim())
     session.login(key.value)
-    void router.push('/')
+    void router.push({ name: 'dashboard' })
   } catch (e) {
     if (e instanceof ApiError && e.status === 0) {
       toast.error('Sem resposta da API', { description: 'Verifique sua conexão ou se a API está no ar.' })

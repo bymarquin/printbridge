@@ -4,14 +4,15 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/login', name: 'login', component: () => import('../views/LoginView.vue') },
-    { path: '/', redirect: '/app' },
+    { path: '/', redirect: { name: 'dashboard' } },
     {
       path: '/app',
       component: () => import('../layouts/MainLayout.vue'),
       meta: { auth: true },
       children: [
+        { path: '', redirect: { name: 'dashboard' } },
         {
-          path: '', name: 'dashboard', component: () => import('../views/DashboardView.vue'),
+          path: 'dashboard', name: 'dashboard', component: () => import('../views/DashboardView.vue'),
           meta: { title: 'Dashboard', subtitle: 'Panorama da operação.' },
         },
         {
