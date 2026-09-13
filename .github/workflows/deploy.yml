@@ -24,11 +24,10 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          # SHA256 do host key RSA da VPS (conferido contra o known_hosts já
-          # confiado nesta máquina — a lib do ssh-action negocia RSA, não
-          # ED25519, apesar do cliente OpenSSH normal preferir ED25519) —
+          # SHA256 do host key da VPS que a lib do ssh-action negocia (não é
+          # necessariamente o mesmo tipo que o OpenSSH normal prefere) —
           # sem isso o ssh-action não valida o host, abrindo MITM no deploy.
-          fingerprint: SHA256:mY6tVzFS6I5Ig4SRIIwkekcNvNTOLqqw43CF48jprEI
+          fingerprint: SHA256:E260fOH/WVpucKa1aDsXyiB7cKJm7Vdz/P1a9vJLXJI
           command_timeout: 10m
           script_stop: true
           script: |
