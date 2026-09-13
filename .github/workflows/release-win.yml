@@ -26,6 +26,7 @@ jobs:
           cache: npm
           cache-dependency-path: agent/package-lock.json
       - run: npm ci
+      - run: npm run build
       - run: npm run dist:win -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
