@@ -61,10 +61,27 @@ export const openApiDocument = {
       },
       WebhookDelivery: {
         type: "object",
-        description: "POST { event, job: { id, orderId, printerId, status, attempts, lastError }, timestamp }. Headers: x-printbridge-event, x-printbridge-signature: sha256=<hmac hex do corpo>.",
+        description: "Eventos job.*: POST { event, job: { id, orderId, printerId, status, attempts, lastError }, timestamp }. Eventos printer.*: POST { event, printer: { agentId, agentLabel, name, isDefault, lastSeenAt }, timestamp } — disparado na transição (não a cada heartbeat) quando uma impressora passa de/para offline (90s sem sync). Headers: x-printbridge-event, x-printbridge-signature: sha256=<hmac hex do corpo>.",
         properties: {
-          event: { type: "string", enum: ["job.created", "job.received", "job.printing", "job.completed", "job.failed", "job.requeued"] },
-          job: { $ref: "#/components/schemas/PrintJob" },
+          event: {
+            type: "string",
+            enum: [
+              "job.created", "job.received", "job.printing", "job.completed", "job.failed", "job.requeued",
+              "printer.offline", "printer.online",
+            ],
+          },
+          job: { $ref: "#/components/schemas/PrintJob", description: "Presente só em eventos job.*" },
+          printer: {
+            type: "object",
+            description: "Presente só em eventos printer.*",
+            properties: {
+              agentId: { type: "string" },
+              agentLabel: { type: "string" },
+              name: { type: "string" },
+              isDefault: { type: "boolean" },
+              lastSeenAt: { type: "string", format: "date-time" },
+            },
+          },
           timestamp: { type: "string", format: "date-time" },
         },
       },

@@ -89,6 +89,9 @@ export function migrate(database: Database.Database): void {
   // Colunas de escopo por loja (adicionadas após o MVP inicial).
   ensureColumn(database, "print_jobs", "agent_id", "TEXT REFERENCES agents(id) ON DELETE SET NULL");
   ensureColumn(database, "webhooks", "agent_id", "TEXT REFERENCES agents(id) ON DELETE CASCADE");
+  // Último status avaliado pelo alerta de offline/online — NULL = baseline
+  // (nunca varrida ainda), evita disparar alerta na primeira leitura pós-migração.
+  ensureColumn(database, "printers", "last_alert_status", "TEXT");
 }
 
 /** ADD COLUMN idempotente (SQLite não tem IF NOT EXISTS para isso). */

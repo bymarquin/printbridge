@@ -19,11 +19,12 @@ import {
   deliverDue,
   dispatchJobEvent,
   listWebhooks,
-  type JobEvent,
+  OFFLINE_AFTER_MS,
+  type WebhookEvent,
 } from "../services/webhooks.js";
 
 /** Dispara webhooks sem bloquear a resposta (log + retry ficam no sweeper). */
-function notify(job: Parameters<typeof dispatchJobEvent>[0], event: JobEvent): void {
+function notify(job: Parameters<typeof dispatchJobEvent>[0], event: WebhookEvent): void {
   try {
     dispatchJobEvent(job, event);
   } catch (e) {
@@ -64,13 +65,14 @@ const printersSyncSchema = z.object({
 const webhookSchema = z.object({
   url: z.string().url().max(2048),
   events: z
-    .array(z.enum(["job.created", "job.received", "job.printing", "job.completed", "job.failed", "job.requeued"]))
-    .max(6)
+    .array(z.enum([
+      "job.created", "job.received", "job.printing", "job.completed", "job.failed", "job.requeued",
+      "printer.offline", "printer.online",
+    ]))
+    .max(8)
     .optional(),
   printerIds: z.array(z.string().min(1).max(256)).max(32).optional(),
 });
-
-const OFFLINE_AFTER_MS = 90_000;
 
 export function printAgentRouter(provider: PrintProvider): Router {
   const r = Router();
@@ -264,7 +266,7 @@ export function printAgentRouter(provider: PrintProvider): Router {
         parsed.data.status,
         parsed.data.errorMessage ?? null,
       );
-      notify(job, job.status === "pending" ? "job.requeued" : `job.${job.status}` as JobEvent);
+      notify(job, job.status === "pending" ? "job.requeued" : `job.${job.status}` as WebhookEvent);
       res.json({ job });
     } catch (e) {
       // B2: mapeia erros de domínio, resto é genérico + log.

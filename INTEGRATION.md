@@ -44,7 +44,7 @@ curl -X POST https://SUA-API/print-agent/webhooks \
 # → {"webhook":{"id":"wh_...","secret":"..."}}  (secret aparece UMA vez)
 ```
 
-Cada evento chega como `POST { event, job: { id, orderId, printerId, status, attempts, lastError }, timestamp }` com headers `x-printbridge-event` e `x-printbridge-signature: sha256=<hmac hex do corpo>`. Verifique no Node:
+Eventos `job.*` chegam como `POST { event, job: { id, orderId, printerId, status, attempts, lastError }, timestamp }`. Eventos `printer.offline`/`printer.online` chegam como `POST { event, printer: { agentId, agentLabel, name, isDefault, lastSeenAt }, timestamp }` — disparado só na transição (impressora parou/voltou de responder por 90s), não a cada heartbeat. Ambos com headers `x-printbridge-event` e `x-printbridge-signature: sha256=<hmac hex do corpo>`. Verifique no Node:
 
 ```js
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -64,6 +64,8 @@ curl https://SUA-API/print-agent/printers -H "Authorization: Bearer $TOKEN_DA_LO
 # → { printers: [{ name, isDefault, status, derivedStatus }] }
 # derivedStatus = offline se 90s sem heartbeat do agente
 ```
+
+Não precisa ficar fazendo polling nisso: assine `printer.offline`/`printer.online` no webhook (item 3) e é avisado assim que uma impressora para ou volta a responder.
 
 ## 5. Produção: o que dá errado e o que fazer
 

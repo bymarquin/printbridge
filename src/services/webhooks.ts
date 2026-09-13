@@ -4,18 +4,20 @@ import type Database from "better-sqlite3";
 import { getDb } from "../infra/db.js";
 import type { PrintJob } from "../domain/printJob.js";
 
-export type JobEvent =
+export type WebhookEvent =
   | "job.created"
   | "job.received"
   | "job.printing"
   | "job.completed"
   | "job.failed"
-  | "job.requeued";
+  | "job.requeued"
+  | "printer.offline"
+  | "printer.online";
 
 export interface Webhook {
   id: string;
   url: string;
-  events: JobEvent[];
+  events: WebhookEvent[];
   printerIds: string[];
   /** Dono (loja). NULL = criado pelo owner = dispara para todas as lojas. */
   agentId: string | null;
@@ -26,9 +28,14 @@ export interface WebhookWithSecret extends Webhook {
   secret: string;
 }
 
-const ALL_EVENTS: JobEvent[] = ["job.created", "job.received", "job.printing", "job.completed", "job.failed", "job.requeued"];
+const ALL_EVENTS: WebhookEvent[] = [
+  "job.created", "job.received", "job.printing", "job.completed", "job.failed", "job.requeued",
+  "printer.offline", "printer.online",
+];
 const RETRY_DELAYS_MS = [30_000, 5 * 60_000]; // após a tentativa imediata
 const DELIVERY_TIMEOUT_MS = 8_000;
+/** Mesmo critério do GET /printers (derivedStatus) — fonte única. */
+export const OFFLINE_AFTER_MS = 90_000;
 
 /** Assina o corpo bruto: header `x-printbridge-signature: sha256=<hex>`. */
 export function signPayload(secret: string, body: string): string {
@@ -134,7 +141,7 @@ function parseList(raw: string): string[] {
 
 /** http em hostname não-local é rejeitado; https sempre passa no protocolo. */
 export async function createWebhook(
-  input: { url: string; events?: JobEvent[]; printerIds?: string[] },
+  input: { url: string; events?: WebhookEvent[]; printerIds?: string[] },
   creatorAgentId: string | null = null,
   database?: Database.Database,
 ): Promise<WebhookWithSecret> {
@@ -175,7 +182,7 @@ export function listWebhooks(database?: Database.Database): Webhook[] {
   return rows.map((r) => ({
     id: r.id,
     url: r.url,
-    events: parseList(r.events) as JobEvent[],
+    events: parseList(r.events) as WebhookEvent[],
     printerIds: parseList(r.printer_ids),
     agentId: r.agent_id ?? null,
   }));
@@ -186,7 +193,7 @@ export function deleteWebhook(id: string, database?: Database.Database): boolean
 }
 
 export interface WebhookEventPayload {
-  event: JobEvent;
+  event: WebhookEvent;
   job: {
     id: string;
     orderId: string | null;
@@ -198,7 +205,13 @@ export interface WebhookEventPayload {
   timestamp: string;
 }
 
-function buildPayload(job: PrintJob, event: JobEvent): WebhookEventPayload {
+export interface PrinterEventPayload {
+  event: WebhookEvent;
+  printer: { agentId: string; agentLabel: string; name: string; isDefault: boolean; lastSeenAt: string };
+  timestamp: string;
+}
+
+function buildJobPayload(job: PrintJob, event: WebhookEvent): WebhookEventPayload {
   return {
     event,
     job: {
@@ -213,27 +226,88 @@ function buildPayload(job: PrintJob, event: JobEvent): WebhookEventPayload {
   };
 }
 
-/** Enfileira entregas (isolamento: webhook da loja A nunca vê job da loja B). */
-export function dispatchJobEvent(job: PrintJob, event: JobEvent, database?: Database.Database): number {
-  const db = dbOf(database);
+/** Filtra assinantes (isolamento por loja + filtro opcional de impressora) e grava as entregas. */
+function enqueueDeliveries(
+  db: Database.Database,
+  event: WebhookEvent,
+  agentId: string | null,
+  printerId: string,
+  payload: unknown,
+): number {
   const subs = listWebhooks(db).filter(
     (w) =>
       w.events.includes(event) &&
-      (w.printerIds.length === 0 || w.printerIds.includes(job.printerId)) &&
-      (w.agentId === null || w.agentId === job.agentId),
+      (w.printerIds.length === 0 || w.printerIds.includes(printerId)) &&
+      (w.agentId === null || w.agentId === agentId),
   );
   const now = new Date().toISOString();
-  const payload = JSON.stringify(buildPayload(job, event));
+  const body = JSON.stringify(payload);
   const insert = db.prepare(
     "INSERT INTO webhook_deliveries (id, webhook_id, event, payload, next_attempt_at) VALUES (?, ?, ?, ?, ?)",
   );
   const tx = db.transaction(() => {
     for (const w of subs) {
-      insert.run(`wd_${randomBytes(8).toString("hex")}`, w.id, event, payload, now);
+      insert.run(`wd_${randomBytes(8).toString("hex")}`, w.id, event, body, now);
     }
   });
   tx();
   return subs.length;
+}
+
+/** Enfileira entregas (isolamento: webhook da loja A nunca vê job da loja B). */
+export function dispatchJobEvent(job: PrintJob, event: WebhookEvent, database?: Database.Database): number {
+  const db = dbOf(database);
+  return enqueueDeliveries(db, event, job.agentId, job.printerId, buildJobPayload(job, event));
+}
+
+interface PrinterRow {
+  id: string;
+  agent_id: string;
+  agent_label: string;
+  name: string;
+  is_default: number;
+  status: string;
+  last_seen_at: string;
+  last_alert_status: string | null;
+}
+
+/**
+ * Varre as impressoras e dispara printer.offline/printer.online só na
+ * transição de estado (não a cada sweep) — mesmo critério de offline do
+ * GET /printers (derivedStatus). Chamado pelo sweeper periódico do app.
+ */
+export function checkPrinterAlerts(database?: Database.Database): number {
+  const db = dbOf(database);
+  const rows = db
+    .prepare(
+      `SELECT p.id, p.agent_id, a.label as agent_label, p.name, p.is_default, p.status,
+              p.last_seen_at, p.last_alert_status
+       FROM printers p JOIN agents a ON a.id = p.agent_id`,
+    )
+    .all() as PrinterRow[];
+  const now = Date.now();
+  let fired = 0;
+  const setAlertStatus = db.prepare("UPDATE printers SET last_alert_status = ? WHERE id = ?");
+  for (const p of rows) {
+    const derived = now - Date.parse(p.last_seen_at) > OFFLINE_AFTER_MS ? "offline" : p.status;
+    const wasOffline = p.last_alert_status === "offline";
+    const isOffline = derived === "offline";
+    // Baseline (coluna nova/nunca avaliada): grava sem alertar.
+    if (p.last_alert_status !== null && wasOffline !== isOffline) {
+      const event: WebhookEvent = isOffline ? "printer.offline" : "printer.online";
+      const payload: PrinterEventPayload = {
+        event,
+        printer: {
+          agentId: p.agent_id, agentLabel: p.agent_label, name: p.name,
+          isDefault: p.is_default === 1, lastSeenAt: p.last_seen_at,
+        },
+        timestamp: new Date().toISOString(),
+      };
+      fired += enqueueDeliveries(db, event, p.agent_id, p.name, payload);
+    }
+    setAlertStatus.run(derived, p.id);
+  }
+  return fired;
 }
 
 const CLAIM_LEASE_MS = 5 * 60_000; // dono do claim tem 5min p/ POST (timeout é 8s)
@@ -332,10 +406,15 @@ async function postWebhook(url: string, secret: string, event: string, payload: 
   }
 }
 
-/** Sweeper periódico — o app chama no boot; unref para não travar testes. */
+/** Sweeper periódico — entrega webhooks pendentes + detecta impressora offline/online. */
 export function startWebhookSweeper(intervalMs = 15_000): () => void {
   const timer = setInterval(() => {
     deliverDue().catch((e) => console.error("[webhooks] sweeper", (e as Error).message));
+    try {
+      checkPrinterAlerts();
+    } catch (e) {
+      console.error("[webhooks] printer-alerts", (e as Error).message);
+    }
   }, intervalMs);
   if (typeof (timer as unknown as { unref?: () => void }).unref === "function") {
     (timer as unknown as { unref: () => void }).unref();
