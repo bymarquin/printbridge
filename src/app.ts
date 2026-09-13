@@ -1,3 +1,4 @@
+import cors from "cors";
 import express from "express";
 import { getDb } from "./infra/db.js";
 import { printAgentRouter } from "./routes/printAgent.js";
@@ -11,6 +12,9 @@ export type Broadcaster = (jobId: string, agentId?: string | null) => void;
 export function createApp(onEnqueue?: Broadcaster, opts: { webhookSweeper?: boolean } = {}) {
   getDb(); // garante migrate
   const app = express();
+  // API pública p/ sistemas web de qualquer origem: libera CORS total.
+  // Auth continua por bearer owner/agent — origem aberta não é permissão.
+  app.use(cors());
   app.use(express.json({ limit: "8mb" }));
 
   app.get("/health", (_req, res) => {
