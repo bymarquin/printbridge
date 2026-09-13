@@ -6,6 +6,7 @@ import { useToast } from '../stores/toast'
 import Button from '../components/ui/Button.vue'
 import Card from '../components/ui/Card.vue'
 import Empty from '../components/ui/Empty.vue'
+import Input from '../components/ui/Input.vue'
 import Select from '../components/ui/Select.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import Table from '../components/ui/Table.vue'
@@ -16,6 +17,7 @@ const jobs = ref<Job[]>([])
 const lojas = ref<Agent[]>([])
 const lojaWs = ref('')
 const eventos = ref<string[]>([])
+const tokenAvulso = ref('')
 let ws: WebSocket | null = null
 let timer = 0
 
@@ -25,10 +27,18 @@ async function carregar() {
   } catch { /* mantém estado */ }
 }
 
+const temToken = () => (session.tokens[lojaWs.value] ?? '') !== ''
+
+function salvarToken() {
+  if (!lojaWs.value || !tokenAvulso.value.trim()) return
+  session.saveToken(lojaWs.value, tokenAvulso.value.trim())
+  tokenAvulso.value = ''
+  toast.success('Token salvo neste navegador')
+  conectar()
+}
+
 function tokenDaLoja(id: string): string {
-  const t = session.tokens[id] ?? ''
-  if (!t) alert('Token da loja não salvo neste navegador (aparece uma vez no cadastro)')
-  return t
+  return session.tokens[id] ?? ''
 }
 
 async function retry(j: Job) {
@@ -47,7 +57,10 @@ function conectar() {
   ws?.close()
   if (!lojaWs.value) return
   const t = tokenDaLoja(lojaWs.value)
-  if (!t) return
+  if (!t) {
+    toast.warning('Loja sem token', { description: 'Cole o token abaixo para ativar o tempo real e o retry.' })
+    return
+  }
   ws = api.watchJobs(t, (jobId) => {
     eventos.value.unshift(`${new Date().toLocaleTimeString('pt-BR')} — novo job ${jobId.slice(0, 8)}…`)
     void carregar()
@@ -71,6 +84,12 @@ onUnmounted(() => { window.clearInterval(timer); ws?.close() })
       <Select v-model="lojaWs" :options="lojas.map((l) => ({ value: l.id, label: l.label }))" @change="conectar" />
       <span class="text-xs text-zinc-400">WS da loja + polling 5s</span>
     </div>
+    <Card v-if="lojaWs && !temToken()">
+      <div class="flex items-end gap-2">
+        <Input v-model="tokenAvulso" label="Token da loja (criada fora do painel)" placeholder="pb_…" type="password" class="grow" />
+        <Button @click="salvarToken">Salvar</Button>
+      </div>
+    </Card>
     <Card v-if="eventos.length" class="text-sm text-teal-300">
       <p v-for="e in eventos.slice(0, 5)" :key="e">{{ e }}</p>
     </Card>

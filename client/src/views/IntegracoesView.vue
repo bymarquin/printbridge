@@ -5,6 +5,7 @@ import { useSession } from '../stores/session'
 import { useToast } from '../stores/toast'
 import Button from '../components/ui/Button.vue'
 import Card from '../components/ui/Card.vue'
+import ConfirmModal from '../components/ConfirmModal.vue'
 import Empty from '../components/ui/Empty.vue'
 import Input from '../components/ui/Input.vue'
 import Table from '../components/ui/Table.vue'
@@ -14,6 +15,7 @@ const toast = useToast()
 const hooks = ref<Webhook[]>([])
 const url = ref('')
 const secret = ref('')
+const excluindo = ref<string | null>(null)
 
 async function carregar() {
   try {
@@ -37,11 +39,13 @@ async function assinar() {
 
 async function excluir(id: string) {
   try {
-    if (!confirm('Excluir webhook?')) return
     await api.deleteWebhook(session.ownerKey, id)
+    toast.success('Webhook excluído')
     await carregar()
   } catch (e) {
     toast.error((e as Error).message, { description: 'Não foi possível excluir o webhook.' })
+  } finally {
+    excluindo.value = null
   }
 }
 
@@ -66,7 +70,7 @@ onMounted(() => void carregar().catch(() => {}))
             <td><code class="text-xs">{{ w.id }}</code></td>
             <td>{{ w.url }}</td>
             <td class="text-zinc-400">{{ w.events.join(', ') }}</td>
-            <td class="text-right"><Button variant="danger" size="sm" @click="excluir(w.id)">Excluir</Button></td>
+            <td class="text-right"><Button variant="danger" size="sm" @click="excluindo = w.id">Excluir</Button></td>
           </tr>
         </tbody>
       </Table>
@@ -79,5 +83,7 @@ onMounted(() => void carregar().catch(() => {}))
         <p><b>4. Contrato completo:</b> <a :href="API_URL + '/openapi.json'" target="_blank" class="text-teal-300 underline">openapi.json</a></p>
       </div>
     </Card>
+    <ConfirmModal v-if="excluindo" title="Excluir webhook?" message="O sistema para de receber eventos de impressão."
+      @ok="excluir(excluindo)" @cancel="excluindo = null" />
   </div>
 </template>

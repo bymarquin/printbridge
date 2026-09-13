@@ -5,6 +5,7 @@ import { useSession } from '../stores/session'
 import { useToast } from '../stores/toast'
 import Button from '../components/ui/Button.vue'
 import Card from '../components/ui/Card.vue'
+import ConfirmModal from '../components/ConfirmModal.vue'
 import Empty from '../components/ui/Empty.vue'
 import Input from '../components/ui/Input.vue'
 import Table from '../components/ui/Table.vue'
@@ -14,6 +15,7 @@ const toast = useToast()
 const agents = ref<Agent[]>([])
 const label = ref('')
 const novoToken = ref('')
+const revogando = ref<Agent | null>(null)
 
 async function carregar() {
   try {
@@ -39,12 +41,14 @@ async function enroll() {
 
 async function revogar(a: Agent) {
   try {
-    if (!confirm(`Revogar acesso da loja ${a.label}? O agente dela para de funcionar.`)) return
     await api.revokeAgent(session.ownerKey, a.id)
     session.forgetToken(a.id)
+    toast.success('Acesso revogado', { description: `O agente da loja ${a.label} parou de funcionar.` })
     await carregar()
   } catch (e) {
     toast.error((e as Error).message, { description: 'Não foi possível revogar a loja.' })
+  } finally {
+    revogando.value = null
   }
 }
 
@@ -70,10 +74,13 @@ onMounted(() => void carregar())
           <tr v-for="a in agents" :key="a.id">
             <td class="font-semibold text-white">{{ a.label }}</td>
             <td><code class="text-xs">{{ a.id }}</code></td>
-            <td class="text-right"><Button variant="danger" size="sm" @click="revogar(a)">Revogar</Button></td>
+            <td class="text-right"><Button variant="danger" size="sm" @click="revogando = a">Revogar</Button></td>
           </tr>
         </tbody>
       </Table>
     </Card>
+    <ConfirmModal v-if="revogando" title="Revogar loja?"
+      :message="`O agente da loja ${revogando.label} para de funcionar na hora.`"
+      @ok="revogar(revogando)" @cancel="revogando = null" />
   </div>
 </template>
