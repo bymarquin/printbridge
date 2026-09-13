@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import Database from "better-sqlite3";
+import { migrate } from "../src/infra/db.js";
 import {
   InvalidTransitionError,
   JobConflictError,
@@ -8,22 +9,11 @@ import {
 } from "../src/infra/printJobRepository.js";
 import type { PrintJob } from "../src/domain/printJob.js";
 
-// Banco em memória por teste — migrate manual mínima.
+// Banco em memória por teste — mesmo schema de produção via migrate().
 function testDb(): Database.Database {
   const db = new Database(":memory:");
   db.pragma("foreign_keys = ON");
-  db.exec(`
-    CREATE TABLE agents (id TEXT PRIMARY KEY, label TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL DEFAULT 'x');
-    CREATE TABLE print_jobs (
-      id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL UNIQUE, order_id TEXT,
-      payload_type TEXT NOT NULL, payload_base64 TEXT NOT NULL, printer_id TEXT NOT NULL,
-      copies INTEGER NOT NULL DEFAULT 1, paper_width INTEGER NOT NULL DEFAULT 80,
-      status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0,
-      last_error TEXT, next_attempt_at TEXT NOT NULL DEFAULT '2026-01-01T00:00:00.000Z',
-      created_at TEXT NOT NULL DEFAULT '2026-01-01T00:00:00.000Z',
-      updated_at TEXT NOT NULL DEFAULT '2026-01-01T00:00:00.000Z'
-    );
-  `);
+  migrate(db);
   return db;
 }
 

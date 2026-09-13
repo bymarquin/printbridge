@@ -86,4 +86,14 @@ export function migrate(database: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_deliveries_due ON webhook_deliveries(status, next_attempt_at);
   `);
+  // Colunas de escopo por loja (adicionadas após o MVP inicial).
+  ensureColumn(database, "print_jobs", "agent_id", "TEXT REFERENCES agents(id) ON DELETE SET NULL");
+  ensureColumn(database, "webhooks", "agent_id", "TEXT REFERENCES agents(id) ON DELETE CASCADE");
+}
+
+/** ADD COLUMN idempotente (SQLite não tem IF NOT EXISTS para isso). */
+function ensureColumn(database: Database.Database, table: string, column: string, ddl: string): void {
+  const cols = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (cols.some((c) => c.name === column)) return;
+  database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
 }

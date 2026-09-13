@@ -18,7 +18,7 @@ let server: Server;
 let baseUrl = "";
 let agentToken = "";
 let tmpDir = "";
-const wssClients = new Set<WebSocket>();
+const wssClientsByAgent = new Map<string, Set<WebSocket>>();
 
 function auth(token: string): HeadersInit {
   return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
@@ -37,23 +37,29 @@ beforeAll(async () => {
   process.env.PRINTBRIDGE_DB = path.join(tmpDir, "backend.db");
   process.env.OWNER_SETUP_KEY = SETUP_KEY;
 
-  const broadcast = (jobId: string) => {
+  const broadcast = (jobId: string, agentId?: string | null) => {
     const msg = JSON.stringify({ type: "new-job", jobId });
-    for (const ws of wssClients) if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+    const targets = agentId ? [wssClientsByAgent.get(agentId)] : [...wssClientsByAgent.values()];
+    for (const set of targets) {
+      if (!set) continue;
+      for (const ws of set) if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+    }
   };
   const app = createApp(broadcast);
   server = createServer(app);
   const wss = new WebSocketServer({ server, path: "/print-agent/ws" });
   wss.on("connection", (ws, req) => {
     const url = new URL(req.url ?? "/", "http://localhost");
-    if (!findAgentByToken(url.searchParams.get("token") ?? "")) {
+    const agent = findAgentByToken(url.searchParams.get("token") ?? "");
+    if (!agent) {
       ws.close(4401, "unauthorized");
       return;
     }
-    wssClients.add(ws);
-    const pending = new PrintJobRepository().listPending(20);
+    if (!wssClientsByAgent.has(agent.id)) wssClientsByAgent.set(agent.id, new Set());
+    wssClientsByAgent.get(agent.id)!.add(ws);
+    const pending = new PrintJobRepository().listPending(20, agent.id);
     ws.send(JSON.stringify({ type: "backlog", jobs: pending.map((j) => j.id) }));
-    ws.on("close", () => wssClients.delete(ws));
+    ws.on("close", () => wssClientsByAgent.get(agent.id)?.delete(ws));
   });
 
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -73,7 +79,7 @@ beforeAll(async () => {
 }, 30000);
 
 afterAll(async () => {
-  for (const ws of wssClients) ws.close();
+  for (const set of wssClientsByAgent.values()) for (const ws of set) ws.close();
   await new Promise<void>((resolve) => server.close(() => resolve()));
   closeDb();
   fs.rmSync(tmpDir, { recursive: true, force: true });

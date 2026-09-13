@@ -78,6 +78,9 @@ export const openApiDocument = {
     "/openapi.json": {
       get: { summary: "Este contrato", responses: { "200": { description: "OpenAPI JSON" } } },
     },
+    "/app/admin": {
+      get: { summary: "Painel do dono (HTML, login com x-setup-key na página)", responses: { "200": { description: "página HTML" } } },
+    },
     "/print-agent/enroll": {
       post: {
         summary: "Gera token da loja",
@@ -117,6 +120,34 @@ export const openApiDocument = {
         summary: "Reivindicar job (atômico)",
         security: [{ bearer: [] }],
         responses: { "200": { description: "{ job }" }, "404": { description: "não existe" }, "409": { description: "já reivindicado" } },
+      },
+    },
+    "/print-agent/agents": {
+      get: {
+        summary: "Listar lojas (owner)",
+        security: [{ setupKey: [] }],
+        responses: { "200": { description: "{ agents }" }, "403": { description: "forbidden" } },
+      },
+    },
+    "/print-agent/agents/{id}": {
+      delete: {
+        summary: "Revogar loja (owner)",
+        security: [{ setupKey: [] }],
+        responses: { "204": { description: "revogado" }, "404": { description: "não existe" } },
+      },
+    },
+    "/print-agent/jobs/recent": {
+      get: {
+        summary: "Últimos jobs p/ painel (owner, sem payload)",
+        security: [{ setupKey: [] }],
+        responses: { "200": { description: "{ jobs }" } },
+      },
+    },
+    "/print-agent/printers/all": {
+      get: {
+        summary: "Todas impressoras + loja (owner, painel)",
+        security: [{ setupKey: [] }],
+        responses: { "200": { description: "{ printers }" } },
       },
     },
     "/print-agent/printers/sync": {

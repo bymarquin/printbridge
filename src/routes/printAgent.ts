@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Response } from "express";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { getDb } from "../infra/db.js";
@@ -9,8 +9,9 @@ import {
   PayloadTooLargeError,
   PrintJobRepository,
 } from "../infra/printJobRepository.js";
-import { createAgent, hashToken, safeEqualString } from "../infra/tokenStore.js";
-import { agentAuth, type AuthedRequest } from "../middleware/auth.js";
+import { createAgent, hashToken, listAgents, revokeAgent, safeEqualString } from "../infra/tokenStore.js";
+import { agentAuth, agentOrOwnerAuth, ownerAuth, type AuthedRequest } from "../middleware/auth.js";
+import type { PrintJob } from "../domain/printJob.js";
 import type { PrintProvider } from "../services/provider.js";
 import {
   createWebhook,
@@ -75,6 +76,19 @@ export function printAgentRouter(provider: PrintProvider): Router {
   const r = Router();
   const repo = new PrintJobRepository();
 
+  /**
+   * Isolamento por loja: job de outra loja (ou inexistente) => 404 idêntico,
+   * sem vazar existência. Owner não passa por aqui (rotas owner são separadas).
+   */
+  const ownedOr404 = (req: AuthedRequest, res: Response): PrintJob | null => {
+    const job = repo.getById(req.params.id);
+    if (!job || (job.agentId !== null && job.agentId !== req.agentId)) {
+      res.status(404).json({ error: "not found" });
+      return null;
+    }
+    return job;
+  };
+
   // Enroll — protegido por chave owner (B1: comparação constante).
   r.post("/enroll", (req, res) => {
     const setupKey = process.env.OWNER_SETUP_KEY;
@@ -94,18 +108,94 @@ export function printAgentRouter(provider: PrintProvider): Router {
     res.status(201).json({ agentId: agent.id, token });
   });
 
+  // ---- Owner (painel admin): antes do agentAuth ----
+  r.get("/agents", ownerAuth, (_req, res) => {
+    res.json({ agents: listAgents() });
+  });
+
+  r.delete("/agents/:id", ownerAuth, (req, res) => {
+    if (!revokeAgent(req.params.id)) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+    res.status(204).end();
+  });
+
+  r.get("/jobs/recent", ownerAuth, (req, res) => {
+    const limit = Math.min(Number(req.query.limit ?? 30), 100);
+    res.json({ jobs: repo.listRecent(Number.isFinite(limit) ? limit : 30) });
+  });
+
+  r.get("/printers/all", ownerAuth, (_req, res) => {
+    const db = getDb();
+    const rows = db
+      .prepare(
+        `SELECT p.name, p.is_default as isDefault, p.status, p.last_seen_at as lastSeenAt, a.label as agent
+         FROM printers p JOIN agents a ON a.id = p.agent_id ORDER BY a.label, p.name`,
+      )
+      .all() as Array<{ name: string; isDefault: number; status: string; lastSeenAt: string; agent: string }>;
+    const now = Date.now();
+    res.json({
+      printers: rows.map((p) => ({
+        agent: p.agent,
+        name: p.name,
+        isDefault: p.isDefault === 1,
+        derivedStatus: now - Date.parse(p.lastSeenAt) > OFFLINE_AFTER_MS ? "offline" : p.status,
+        lastSeenAt: p.lastSeenAt,
+      })),
+    });
+  });
+
+  // Webhooks: bearer da loja OU chave owner (painel) — antes do agentAuth.
+  r.post("/webhooks", agentOrOwnerAuth, async (req: AuthedRequest, res) => {
+    const parsed = webhookSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
+      return;
+    }
+    try {
+      const wh = await createWebhook(parsed.data, req.agentId ?? null);
+      res.status(201).json({ webhook: wh });
+    } catch (e) {
+      res.status(422).json({ error: (e as Error).message });
+    }
+  });
+
+  r.get("/webhooks", agentOrOwnerAuth, (req: AuthedRequest, res) => {
+    const all = listWebhooks();
+    // Owner vê tudo; loja vê os globais + os seus (nunca os da vizinha).
+    const visible = req.agentId ? all.filter((w) => w.agentId === null || w.agentId === req.agentId) : all;
+    res.json({ webhooks: visible.map(({ agentId: _o, ...w }) => w) });
+  });
+
+  r.delete("/webhooks/:id", agentOrOwnerAuth, (req: AuthedRequest, res) => {
+    if (req.agentId) {
+      const target = listWebhooks().find((w) => w.id === req.params.id);
+      if (!target || target.agentId !== req.agentId) {
+        res.status(404).json({ error: "not found" });
+        return;
+      }
+    }
+    if (!deleteWebhook(req.params.id)) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+    res.status(204).end();
+  });
+
   r.use(agentAuth);
 
   // Enfileirar (idempotente por idempotencyKey).
   // Nota: mesma key + payload diferente retorna o job original (dedupe intencional).
-  r.post("/jobs", (req, res) => {
+  // O job nasce com o dono = bearer chamador (isolamento por loja).
+  r.post("/jobs", (req: AuthedRequest, res) => {
     const parsed = enqueueSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.flatten() });
       return;
     }
     try {
-      const { job, deduplicated } = provider.submit(parsed.data);
+      const { job, deduplicated } = provider.submit({ ...parsed.data, agentId: req.agentId ?? null });
       if (!deduplicated) notify(job, "job.created");
       res.status(deduplicated ? 200 : 201).json({ job, deduplicated });
     } catch (e) {
@@ -119,27 +209,22 @@ export function printAgentRouter(provider: PrintProvider): Router {
     }
   });
 
-  // Polling fallback (10s no agente)
-  r.get("/jobs", (req, res) => {
+  // Polling fallback (10s no agente) — só jobs da própria loja.
+  r.get("/jobs", (req: AuthedRequest, res) => {
     const limit = Math.min(Number(req.query.limit ?? 20), 50);
-    res.json({ jobs: repo.listPending(Number.isFinite(limit) ? limit : 20) });
+    res.json({ jobs: repo.listPending(Number.isFinite(limit) ? limit : 20, req.agentId) });
   });
 
-  r.get("/jobs/:id", (req, res) => {
-    const job = repo.getById(req.params.id);
-    if (!job) {
-      res.status(404).json({ error: "not found" });
-      return;
-    }
+  r.get("/jobs/:id", (req: AuthedRequest, res) => {
+    const job = ownedOr404(req, res);
+    if (!job) return;
     res.json({ job });
   });
 
-  // Claim atômico — 404 se não existe, 409 se já reivindicado.
-  r.post("/jobs/:id/claim", (req, res) => {
-    if (!repo.getById(req.params.id)) {
-      res.status(404).json({ error: "not found" });
-      return;
-    }
+  // Claim atômico — 404 se não existe (ou é de outra loja), 409 se já reivindicado.
+  r.post("/jobs/:id/claim", (req: AuthedRequest, res) => {
+    const existing = ownedOr404(req, res);
+    if (!existing) return;
     const claimed = repo.claim(req.params.id);
     if (!claimed) {
       res.status(409).json({ error: "job já reivindicado ou estado inválido" });
@@ -149,7 +234,7 @@ export function printAgentRouter(provider: PrintProvider): Router {
     res.json({ job: claimed });
   });
 
-  r.patch("/jobs/:id", (req, res) => {
+  r.patch("/jobs/:id", (req: AuthedRequest, res) => {
     const parsed = statusSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.flatten() });
@@ -158,11 +243,8 @@ export function printAgentRouter(provider: PrintProvider): Router {
     try {
       // Claim implícito: pending->received via PATCH usa o mesmo CAS do claim().
       if (parsed.data.status === "received") {
-        const current = repo.getById(req.params.id);
-        if (!current) {
-          res.status(404).json({ error: "not found" });
-          return;
-        }
+        const current = ownedOr404(req, res);
+        if (!current) return;
         if (current.status === "pending") {
           const claimed = repo.claim(current.id);
           if (!claimed) {
@@ -174,6 +256,9 @@ export function printAgentRouter(provider: PrintProvider): Router {
           return;
         }
       }
+      // Dono verificado antes de qualquer transição (isolamento por loja).
+      const current = ownedOr404(req, res);
+      if (!current) return;
       const job = repo.transition(
         req.params.id,
         parsed.data.status,
@@ -250,33 +335,6 @@ export function printAgentRouter(provider: PrintProvider): Router {
         now - Date.parse(p.lastSeenAt) > OFFLINE_AFTER_MS ? "offline" : p.status,
     }));
     res.json({ printers });
-  });
-
-  // Webhooks de status para sistemas web (HMAC em x-printbridge-signature).
-  r.post("/webhooks", async (req, res) => {
-    const parsed = webhookSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.flatten() });
-      return;
-    }
-    try {
-      const wh = await createWebhook(parsed.data);
-      res.status(201).json({ webhook: wh });
-    } catch (e) {
-      res.status(422).json({ error: (e as Error).message });
-    }
-  });
-
-  r.get("/webhooks", (_req, res) => {
-    res.json({ webhooks: listWebhooks() });
-  });
-
-  r.delete("/webhooks/:id", (req, res) => {
-    if (!deleteWebhook(req.params.id)) {
-      res.status(404).json({ error: "not found" });
-      return;
-    }
-    res.status(204).end();
   });
 
   return r;

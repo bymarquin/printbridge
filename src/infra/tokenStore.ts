@@ -66,3 +66,10 @@ export function revokeAgent(id: string, database?: Database.Database): boolean {
   const db = database ?? getDb();
   return db.prepare("DELETE FROM agents WHERE id = ?").run(id).changes > 0;
 }
+
+export function listAgents(database?: Database.Database): Array<{ id: string; label: string; createdAt: string }> {
+  const db = database ?? getDb();
+  return db
+    .prepare("SELECT id, label, created_at as createdAt FROM agents ORDER BY created_at DESC")
+    .all() as Array<{ id: string; label: string; createdAt: string }>;
+}

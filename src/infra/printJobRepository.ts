@@ -14,6 +14,7 @@ interface JobRow {
   id: string;
   idempotency_key: string;
   order_id: string | null;
+  agent_id: string | null;
   payload_type: PayloadType;
   payload_base64: string;
   printer_id: string;
@@ -32,6 +33,7 @@ function toDomain(r: JobRow): PrintJob {
     id: r.id,
     idempotencyKey: r.idempotency_key,
     orderId: r.order_id,
+    agentId: r.agent_id ?? null,
     payloadType: r.payload_type,
     payloadBase64: r.payload_base64,
     printerId: r.printer_id,
@@ -49,6 +51,8 @@ function toDomain(r: JobRow): PrintJob {
 export interface EnqueueInput {
   idempotencyKey: string;
   orderId?: string | null;
+  /** Dono (loja) — a rota preenche com o bearer chamador. */
+  agentId?: string | null;
   payloadType: PayloadType;
   payloadBase64: string;
   printerId: string;
@@ -113,6 +117,7 @@ export class PrintJobRepository {
       id: randomUUID(),
       idempotency_key: input.idempotencyKey,
       order_id: input.orderId ?? null,
+      agent_id: input.agentId ?? null,
       payload_type: input.payloadType,
       payload_base64: input.payloadBase64,
       printer_id: input.printerId,
@@ -127,9 +132,9 @@ export class PrintJobRepository {
     };
     db.prepare(
       `INSERT INTO print_jobs
-       (id, idempotency_key, order_id, payload_type, payload_base64, printer_id,
+       (id, idempotency_key, order_id, agent_id, payload_type, payload_base64, printer_id,
         copies, paper_width, status, attempts, last_error, next_attempt_at, created_at, updated_at)
-       VALUES (@id, @idempotency_key, @order_id, @payload_type, @payload_base64, @printer_id,
+       VALUES (@id, @idempotency_key, @order_id, @agent_id, @payload_type, @payload_base64, @printer_id,
         @copies, @paper_width, @status, @attempts, @last_error, @next_attempt_at, @created_at, @updated_at)`,
     ).run(row);
     const created = db
@@ -138,16 +143,38 @@ export class PrintJobRepository {
     return { job: toDomain(created), deduplicated: false };
   }
 
-  listPending(limit = 20): PrintJob[] {
+  /**
+   * Pendentes da LOJA (agentId obrigatório nas rotas de agente).
+   * Sem agentId = sem filtro (uso interno/admin).
+   */
+  listPending(limit = 20, agentId?: string): PrintJob[] {
     const now = new Date().toISOString();
+    const sql = agentId
+      ? `SELECT * FROM print_jobs
+         WHERE status = 'pending' AND next_attempt_at <= ? AND agent_id = ?
+         ORDER BY created_at ASC LIMIT ?`
+      : `SELECT * FROM print_jobs
+         WHERE status = 'pending' AND next_attempt_at <= ?
+         ORDER BY created_at ASC LIMIT ?`;
+    const rows = (agentId
+      ? this.db().prepare(sql).all(now, agentId, limit)
+      : this.db().prepare(sql).all(now, limit)) as JobRow[];
+    return rows.map(toDomain);
+  }
+
+  /** Últimos jobs em qualquer estado — painel admin. Sem payload (pesado). */
+  listRecent(limit = 30): Array<Omit<PrintJob, "payloadBase64">> {
     const rows = this.db()
       .prepare(
-        `SELECT * FROM print_jobs
-         WHERE status = 'pending' AND next_attempt_at <= ?
-         ORDER BY created_at ASC LIMIT ?`,
+        `SELECT id, idempotency_key, order_id, agent_id, payload_type, '' as payload_base64, printer_id,
+                copies, paper_width, status, attempts, last_error, next_attempt_at, created_at, updated_at
+         FROM print_jobs ORDER BY created_at DESC LIMIT ?`,
       )
-      .all(now, limit) as JobRow[];
-    return rows.map(toDomain);
+      .all(Math.min(Math.max(limit, 1), 100)) as JobRow[];
+    return rows.map((r) => {
+      const { payloadBase64: _omit, ...rest } = toDomain(r);
+      return rest;
+    });
   }
 
   getById(id: string): PrintJob | null {

@@ -3,9 +3,10 @@ import { getDb } from "./infra/db.js";
 import { printAgentRouter } from "./routes/printAgent.js";
 import { LocalQueueProvider } from "./services/localQueueProvider.js";
 import { openApiDocument } from "./openapi.js";
+import { ADMIN_HTML } from "./admin.js";
 import { startWebhookSweeper } from "./services/webhooks.js";
 
-export type Broadcaster = (jobId: string) => void;
+export type Broadcaster = (jobId: string, agentId?: string | null) => void;
 
 export function createApp(onEnqueue?: Broadcaster, opts: { webhookSweeper?: boolean } = {}) {
   getDb(); // garante migrate
@@ -18,6 +19,10 @@ export function createApp(onEnqueue?: Broadcaster, opts: { webhookSweeper?: bool
 
   app.get("/openapi.json", (_req, res) => {
     res.json(openApiDocument);
+  });
+
+  app.get("/app/admin", (_req, res) => {
+    res.type("html").send(ADMIN_HTML);
   });
 
   const provider = new LocalQueueProvider(onEnqueue);

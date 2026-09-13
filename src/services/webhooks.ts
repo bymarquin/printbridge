@@ -17,6 +17,8 @@ export interface Webhook {
   url: string;
   events: JobEvent[];
   printerIds: string[];
+  /** Dono (loja). NULL = criado pelo owner = dispara para todas as lojas. */
+  agentId: string | null;
 }
 
 export interface WebhookWithSecret extends Webhook {
@@ -133,6 +135,7 @@ function parseList(raw: string): string[] {
 /** http em hostname não-local é rejeitado; https sempre passa no protocolo. */
 export async function createWebhook(
   input: { url: string; events?: JobEvent[]; printerIds?: string[] },
+  creatorAgentId: string | null = null,
   database?: Database.Database,
 ): Promise<WebhookWithSecret> {
   const db = dbOf(database);
@@ -154,25 +157,27 @@ export async function createWebhook(
   for (const e of events) {
     if (!ALL_EVENTS.includes(e)) throw new Error(`evento desconhecido: ${e}`);
   }
-  db.prepare("INSERT INTO webhooks (id, url, secret, events, printer_ids) VALUES (?, ?, ?, ?, ?)").run(
+  db.prepare("INSERT INTO webhooks (id, url, secret, events, printer_ids, agent_id) VALUES (?, ?, ?, ?, ?, ?)").run(
     id,
     url.toString(),
     secret, // guardado em claro: assinar HMAC exige o valor original (como Stripe)
     JSON.stringify(events),
     JSON.stringify(input.printerIds ?? []),
+    creatorAgentId,
   );
-  return { id, url: url.toString(), secret, events, printerIds: input.printerIds ?? [] };
+  return { id, url: url.toString(), secret, events, printerIds: input.printerIds ?? [], agentId: creatorAgentId };
 }
 
 export function listWebhooks(database?: Database.Database): Webhook[] {
   const rows = dbOf(database)
-    .prepare("SELECT id, url, events, printer_ids FROM webhooks ORDER BY created_at ASC")
-    .all() as Array<{ id: string; url: string; events: string; printer_ids: string }>;
+    .prepare("SELECT id, url, events, printer_ids, agent_id FROM webhooks ORDER BY created_at ASC")
+    .all() as Array<{ id: string; url: string; events: string; printer_ids: string; agent_id: string | null }>;
   return rows.map((r) => ({
     id: r.id,
     url: r.url,
     events: parseList(r.events) as JobEvent[],
     printerIds: parseList(r.printer_ids),
+    agentId: r.agent_id ?? null,
   }));
 }
 
@@ -208,13 +213,14 @@ function buildPayload(job: PrintJob, event: JobEvent): WebhookEventPayload {
   };
 }
 
-/** Enfileira entregas para webhooks que assinam o evento (filtro opcional por impressora). */
+/** Enfileira entregas (isolamento: webhook da loja A nunca vê job da loja B). */
 export function dispatchJobEvent(job: PrintJob, event: JobEvent, database?: Database.Database): number {
   const db = dbOf(database);
   const subs = listWebhooks(db).filter(
     (w) =>
       w.events.includes(event) &&
-      (w.printerIds.length === 0 || w.printerIds.includes(job.printerId)),
+      (w.printerIds.length === 0 || w.printerIds.includes(job.printerId)) &&
+      (w.agentId === null || w.agentId === job.agentId),
   );
   const now = new Date().toISOString();
   const payload = JSON.stringify(buildPayload(job, event));

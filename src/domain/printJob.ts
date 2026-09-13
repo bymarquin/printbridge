@@ -11,6 +11,8 @@ export interface PrintJob {
   id: string;
   idempotencyKey: string;
   orderId: string | null;
+  /** Dono (loja). NULL = legado/owner — invisível para agentes. */
+  agentId: string | null;
   payloadType: PayloadType;
   /** base64 do PDF ou texto/bytes ESC/POS em base64 */
   payloadBase64: string;

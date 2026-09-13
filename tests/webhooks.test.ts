@@ -29,7 +29,7 @@ const baseJob: PrintJob = {
   idempotencyKey: "order-1",
   orderId: "order-1",
   payloadType: "raw",
-  payloadBase64: "eA==",
+  payloadBase64: "eA==", agentId: null,
   printerId: "cozinha",
   copies: 1,
   paperWidth: 80,
@@ -71,9 +71,9 @@ describe("webhooks", () => {
   });
 
   it("exige https (http só localhost) e valida eventos", async () => {
-    await expect(createWebhook({ url: "http://api.exemplo.com/hook" }, db)).rejects.toThrow(/https|privado/i);
-    await expect(createWebhook({ url: "https://x.com/h", events: ["nope" as never] }, db)).rejects.toThrow(/desconhecido/);
-    const wh = await createWebhook({ url: "https://sistema.exemplo.com/hook" }, db);
+    await expect(createWebhook({ url: "http://api.exemplo.com/hook" }, null, db)).rejects.toThrow(/https|privado/i);
+    await expect(createWebhook({ url: "https://x.com/h", events: ["nope" as never] }, null, db)).rejects.toThrow(/desconhecido/);
+    const wh = await createWebhook({ url: "https://sistema.exemplo.com/hook" }, null, db);
     expect(wh.secret.length).toBeGreaterThan(30);
     expect(listWebhooks(db)).toHaveLength(1);
     expect(listWebhooks(db)[0]).not.toHaveProperty("secret"); // segredo nunca lista
@@ -105,7 +105,7 @@ describe("webhooks", () => {
     });
     const port = (server.address() as AddressInfo).port;
     try {
-      await createWebhook({ url: `http://127.0.0.1:${port}/hook` }, db);
+      await createWebhook({ url: `http://127.0.0.1:${port}/hook` }, null, db);
       dispatchJobEvent(baseJob, "job.completed", db);
       const r = await deliverDue(20, db);
       expect(r.failed).toBe(1);
@@ -124,7 +124,7 @@ describe("webhooks", () => {
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
     const port = (server.address() as AddressInfo).port;
     try {
-      const wh = await createWebhook({ url: `http://127.0.0.1:${port}/hook`, events: ["job.completed"] }, db);
+      const wh = await createWebhook({ url: `http://127.0.0.1:${port}/hook`, events: ["job.completed"] }, null, db);
       expect(dispatchJobEvent(baseJob, "job.completed", db)).toBe(1);
       expect(dispatchJobEvent({ ...baseJob, id: "x", printerId: "bar" }, "job.printing", db)).toBe(0); // filtro evento
       const r = await deliverDue(20, db);
@@ -145,7 +145,7 @@ describe("webhooks", () => {
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
     const port = (server.address() as AddressInfo).port;
     try {
-      await createWebhook({ url: `http://127.0.0.1:${port}/hook` }, db);
+      await createWebhook({ url: `http://127.0.0.1:${port}/hook` }, null, db);
       dispatchJobEvent(baseJob, "job.completed", db);
       const [a, b] = await Promise.all([deliverDue(20, db), deliverDue(20, db)]);
       expect(a.delivered + b.delivered).toBe(1);
@@ -155,13 +155,13 @@ describe("webhooks", () => {
     }
   });
   it("filtro por impressora: cozinha não recebe evento do bar", async () => {
-    await createWebhook({ url: "https://a.exemplo.com/h", printerIds: ["cozinha"] }, db);
+    await createWebhook({ url: "https://a.exemplo.com/h", printerIds: ["cozinha"] }, null, db);
     expect(dispatchJobEvent(baseJob, "job.completed", db)).toBe(1);
     expect(dispatchJobEvent({ ...baseJob, id: "y", printerId: "bar" }, "job.completed", db)).toBe(0);
   });
 
   it("falha retenta 2x e depois marca dead (sem perder silencioso)", async () => {
-    await createWebhook({ url: "http://127.0.0.1:1/inválida" }, db); // porta fechada
+    await createWebhook({ url: "http://127.0.0.1:1/inválida" }, null, db); // porta fechada
     dispatchJobEvent(baseJob, "job.failed", db);
     const forceDue = () =>
       db.prepare("UPDATE webhook_deliveries SET next_attempt_at = '2020-01-01T00:00:00.000Z'").run();
