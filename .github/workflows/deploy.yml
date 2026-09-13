@@ -19,11 +19,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH (git pull + build backend + restart printbridge-api + build client)
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          # SHA256 do host key ED25519 da VPS (conferido contra o known_hosts
+          # já confiado nesta máquina) — sem isso o ssh-action não valida o
+          # host, abrindo brecha de MITM em cima do próprio deploy.
+          fingerprint: SHA256:5ENjEWXiQ7LGgZKUuIESBJWv69gaSEIudOMyCxlLekY
           command_timeout: 10m
           script_stop: true
           script: |
