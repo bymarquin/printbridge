@@ -47,6 +47,16 @@ const CFG = ${injected};
 const fs = require('fs'), path = require('path');
 const normalizeApi = (v) => v.trim().replace(/\/$/,'')
   .replace(/\/print-agent(\/enroll)?\/?$/,'') || v.trim();
+// fetch com timeout: sem isso, rede travada = "Conectando…" para sempre.
+async function tfetch(url, opts, ms) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms || 15000);
+  try {
+    return await fetch(url, Object.assign({}, opts, { signal: ctrl.signal }));
+  } catch(e) {
+    throw new Error(e.name === 'AbortError' ? 'sem resposta da API em 15s — confira o endereço e a internet' : (e.message || e));
+  } finally { clearTimeout(t); }
+}
 document.getElementById('api').value = CFG.apiUrl;
 document.getElementById('apiFixed').textContent = CFG.apiUrl;
 try { document.getElementById('label').value = require('os').hostname(); } catch(e) {}
@@ -63,7 +73,7 @@ document.getElementById('go').onclick = async function(){
     if (!/^https?:\/\//.test(api)) throw new Error('endereço inválido — use https://sua-api');
     const setupKey = document.getElementById('setupKey').value.trim();
     const label = document.getElementById('label').value.trim() || 'loja';
-    const r = await fetch(api + '/print-agent/enroll', { method: 'POST',
+    const r = await tfetch(api + '/print-agent/enroll', { method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-setup-key': setupKey },
       body: JSON.stringify({ label }) });
     if (r.status === 403) throw new Error('chave de instalação inválida');
