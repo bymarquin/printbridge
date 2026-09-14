@@ -88,7 +88,10 @@ async function boot(): Promise<void> {
       iconFor(),
       appVersion(app),
       {
-        getStatus: () => (runtime.lastTickAt() ? `ok (tick ${runtime.lastTickAt()})` : "iniciando…"),
+        getStatus: () => {
+          const who = cfg.computerName ? `${cfg.computerName} · ` : "";
+          return runtime.lastTickAt() ? `${who}ok` : `${who}iniciando…`;
+        },
         onOpenLogs: () => shell.showItemInFolder(logDir()),
         onCheckUpdates: () => void checkForUpdates(loadUpdater(), log),
         onConnection: () =>

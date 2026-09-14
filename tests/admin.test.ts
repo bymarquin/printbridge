@@ -52,7 +52,16 @@ describe("admin", () => {
       method: "POST", headers: owner(), body: JSON.stringify({ label: "loja-teste" }),
     });
     expect(enroll.status).toBe(201);
-    const { agentId } = (await enroll.json()) as { agentId: string };
+    const { agentId, token } = (await enroll.json()) as { agentId: string; token: string };
+    const me = await fetch(`${base}/print-agent/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(me.status).toBe(200);
+    expect(((await me.json()) as { agent: { id: string; label: string } }).agent).toMatchObject({
+      id: agentId,
+      label: "loja-teste",
+    });
+    expect((await fetch(`${base}/print-agent/me`)).status).toBe(401);
     const list = (await (await fetch(`${base}/print-agent/agents`, { headers: owner() })).json()) as {
       agents: Array<{ id: string; label: string }>;
     };

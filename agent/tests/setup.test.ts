@@ -40,9 +40,9 @@ describe("instalação fácil", () => {
   it("assistente gera HTML com campos e caminho embutido", () => {
     const html = buildSetupHtml({ configPath: "C:\\cfg\\config.json", apiUrl: "https://x" });
     expect(html).toContain("Servidor");
-    expect(html).toContain("Chave de instalação");
+    expect(html).toContain("Token da loja");
     expect(html).toContain("C:\\\\cfg\\\\config.json"); // JSON-escaped dentro do script
-    expect(html).toContain("/print-agent/enroll");
+    expect(html).toContain("/print-agent/me");
     expect(html).toContain("data:image/png;base64"); // logotipo embutida
   });
 

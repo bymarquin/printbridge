@@ -185,6 +185,19 @@ export function printAgentRouter(provider: PrintProvider): Router {
 
   r.use(agentAuth);
 
+  // Quem sou eu: o agente confirma a loja dona do token (exibido no setup).
+  r.get("/me", (req: AuthedRequest, res) => {
+    const db = getDb();
+    const row = db.prepare("SELECT id, label FROM agents WHERE id = ?").get(req.agentId!) as
+      | { id: string; label: string }
+      | undefined;
+    if (!row) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+    res.json({ agent: row });
+  });
+
   // Enfileirar (idempotente por idempotencyKey).
   // Nota: mesma key + payload diferente retorna o job original (dedupe intencional).
   // O job nasce com o dono = bearer chamador (isolamento por loja).

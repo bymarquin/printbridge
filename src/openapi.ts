@@ -127,6 +127,13 @@ export const openApiDocument = {
         responses: { "201": { description: "agentId + token (guarde — não é recuperável)" }, "403": { description: "setup key inválida" } },
       },
     },
+    "/print-agent/me": {
+      get: {
+        summary: "Loja dona do token (usado no setup do agente)",
+        security: [{ bearer: [] }],
+        responses: { "200": { description: "{ agent: { id, label } }" } },
+      },
+    },
     "/print-agent/jobs": {
       post: {
         summary: "Enfileirar impressão (idempotente)",

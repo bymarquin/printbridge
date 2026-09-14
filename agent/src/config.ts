@@ -9,6 +9,8 @@ export const DEFAULT_API_URL = "https://printbridge.duckdns.org";
 const configSchema = z.object({
   apiBaseUrl: z.string().url().default(DEFAULT_API_URL),
   token: z.string().default(""),
+  /** Nome desta máquina (só identificação local/tray). */
+  computerName: z.string().max(64).optional(),
   pollIntervalMs: z.coerce.number().int().min(2000).default(10000),
   dbPath: z.string().default("./data/agent.db"),
   defaultPrinter: z.string().optional(),

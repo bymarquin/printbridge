@@ -36,7 +36,8 @@ ${brandHead(logoDataUrl())}
 <p style="margin:0 0 4px;font-size:14px;color:#fafafa" id="apiFixed"></p>
 <a href="#" id="apiChange" style="font-size:12px;color:#71717a">trocar servidor (avançado)</a>
 <input id="api" type="text" style="display:none" placeholder="URL da sua API">
-<label>Chave de instalação</label><input id="setupKey" type="text">
+<label>Token da loja</label><input id="token" type="text" placeholder="Token gerado no painel">
+<p class="sub" style="margin-top:8px">No painel, vá em Lojas → Cadastrar. O token aparece uma única vez.</p>
 <label>Nome deste computador</label><input id="label" type="text" placeholder="Nome do seu computador">
 <button id="go">Conectar</button>
 <div id="error"></div><div id="ok"></div>
@@ -71,21 +72,20 @@ document.getElementById('go').onclick = async function(){
   try {
     const api = normalizeApi(document.getElementById('api').value);
     if (!/^https?:\/\//.test(api)) throw new Error('endereço inválido — use https://sua-api');
-    const setupKey = document.getElementById('setupKey').value.trim();
-    const label = document.getElementById('label').value.trim() || 'loja';
-    const r = await tfetch(api + '/print-agent/enroll', { method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-setup-key': setupKey },
-      body: JSON.stringify({ label }) });
-    if (r.status === 403) throw new Error('chave de instalação inválida');
-    if (!r.ok) throw new Error('falhou: HTTP ' + r.status);
-    const token = (await r.json()).token;
+    const token = document.getElementById('token').value.trim();
+    if (!token) throw new Error('cole o token gerado no painel');
+    const me = await tfetch(api + '/print-agent/me', { headers: { Authorization: 'Bearer ' + token } });
+    if (me.status === 401) throw new Error('token inválido ou revogado');
+    if (!me.ok) throw new Error('falhou: HTTP ' + me.status);
+    const label = (await me.json()).agent.label;
+    const computerName = document.getElementById('label').value.trim();
     fs.mkdirSync(path.dirname(CFG.configPath), { recursive: true });
     let prev = {};
     try { prev = JSON.parse(fs.readFileSync(CFG.configPath, 'utf8')); } catch(e) {}
     fs.writeFileSync(CFG.configPath,
-      JSON.stringify(Object.assign({}, prev, { apiBaseUrl: api, token }), null, 2),
+      JSON.stringify(Object.assign({}, prev, { apiBaseUrl: api, token, computerName: computerName || undefined }), null, 2),
       { mode: 0o600 });
-    ok.textContent = 'Conectado. O agente vai iniciar sozinho.';
+    ok.textContent = 'Conectado como ' + label + '. O agente vai iniciar sozinho.';
   } catch(e) { ok.textContent = ''; err.textContent = (e.message || e); }
 };
 })();
