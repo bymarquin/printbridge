@@ -20,26 +20,35 @@ export function buildSetupHtml(opts: { configPath: string; apiUrl: string }): st
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
 <title>PrintBridge — Configuração</title>
 <style>
-body{font-family:Segoe UI,Arial,sans-serif;background:#1a1a2e;color:#eee;margin:0;padding:24px;max-width:460px}
-h2{margin-top:0}.card{background:#242442;border-radius:8px;padding:16px;margin:12px 0}
-label{display:block;margin:8px 0 4px;font-size:13px;color:#bbb}
-input[type=text]{width:100%;padding:8px;border-radius:4px;border:1px solid #555;background:#111;color:#eee;box-sizing:border-box}
-button{background:#00b4a0;border:0;color:#001;padding:10px 16px;border-radius:6px;font-weight:bold;cursor:pointer;margin-top:12px}
-#error{color:#ff8080;margin-top:10px;white-space:pre-wrap}#ok{color:#7dffb0;margin-top:10px}
-.small{font-size:12px;color:#999}
+*{box-sizing:border-box}body{font-family:Inter,"Segoe UI",Arial,sans-serif;background:#09090b;color:#f4f4f5;margin:0;padding:24px;display:flex;justify-content:center}
+.wrap{width:100%;max-width:420px}.brand{display:flex;align-items:center;gap:10px;margin:8px 0 4px}
+.dot{width:36px;height:36px;border-radius:10px;background:#2dd4bf;color:#09090b;font-weight:800;font-size:18px;display:flex;align-items:center;justify-content:center}
+.brand b{font-size:17px;letter-spacing:-.02em}.brand small{display:block;color:#a1a1aa;font-size:12px;font-weight:400}
+.card{background:#18181b;border:1px solid #27272a;border-radius:12px;padding:20px;margin-top:16px}
+h1{font-size:18px;margin:0;letter-spacing:-.01em}.sub{color:#a1a1aa;font-size:13px;margin:4px 0 0}
+label{display:block;margin:14px 0 6px;font-size:12px;font-weight:500;color:#a1a1aa}
+input[type=text]{width:100%;height:40px;padding:0 12px;border-radius:6px;border:1px solid #3f3f46;background:#09090b;color:#f4f4f5;font-size:14px;outline:none}
+input[type=text]:focus{border-color:#fafafa}
+.check{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;color:#d4d4d8;cursor:pointer}
+button#go{width:100%;height:40px;margin-top:16px;background:#fafafa;border:0;color:#09090b;font-weight:700;font-size:14px;border-radius:6px;cursor:pointer}
+button#go:hover{background:#e4e4e7}button#go:disabled{opacity:.6;cursor:wait}
+#error{color:#fca5a5;margin-top:12px;font-size:13px;white-space:pre-wrap}
+#ok{color:#6ee7b7;margin-top:12px;font-size:13px}
 </style></head><body>
-<h2>🖨️ PrintBridge Agent</h2>
-<p class="small">Conecte este computador ao servidor da loja. Precisa só uma vez.</p>
+<div class="wrap">
+<div class="brand"><div class="dot">P</div><div><b>PrintBridge</b><small>Impressão para estabelecimentos</small></div></div>
 <div class="card">
+<h1>Bem-vindo(a)</h1>
+<p class="sub">Conecte este computador ao servidor da loja. Precisa só uma vez.</p>
 <label>Endereço da API (VPS)</label>
-<input id="api" type="text" placeholder="https://impressao.sualoja.com">
-<label><input id="haveToken" type="checkbox"> Já tenho o token do agente</label>
+<input id="api" type="text" placeholder="URL da sua API">
+<label class="check"><input id="haveToken" type="checkbox"> Já tenho o token do agente</label>
 <div id="tokenBox" style="display:none">
-<label>Token (pb_…)</label><input id="token" type="text">
+<label>Token da sua loja</label><input id="token" type="text">
 </div>
 <div id="enrollBox">
 <label>Chave de instalação (owner)</label><input id="setupKey" type="text">
-<label>Nome deste computador</label><input id="label" type="text" placeholder="caixa-1">
+<label>Nome deste computador</label><input id="label" type="text" placeholder="Nome do seu computador">
 </div>
 <button id="go">Conectar</button>
 <div id="error"></div><div id="ok"></div>
@@ -56,8 +65,11 @@ document.getElementById('api').value = CFG.apiUrl;
 document.getElementById('go').onclick = async function(){
   const err = document.getElementById('error'), ok = document.getElementById('ok');
   err.textContent = ''; ok.textContent = 'Conectando…';
+  const normalizeApi = (v) => v.trim().replace(/\\/$/,'')
+    .replace(/\\/print-agent(\\/enroll)?\\/?$/,'') || v.trim();
   try {
-    const api = document.getElementById('api').value.replace(/\\/$/,'');
+    const api = normalizeApi(document.getElementById('api').value);
+    if (!/^https?:\\/\\//.test(api)) throw new Error('endereço inválido — use https://sua-api (somente o início, sem /print-agent/...)');
     let token;
     if (document.getElementById('haveToken').checked) {
       token = document.getElementById('token').value.trim();

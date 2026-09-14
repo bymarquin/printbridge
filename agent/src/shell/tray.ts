@@ -26,7 +26,8 @@ export function buildTray(
   cb: TrayCallbacks,
   log: Logger,
 ): TrayHandle {
-  const tray = new Tray(iconPath, "printbridge-agent-tray");
+  // Sem guid: no Windows ele precisa ser GUID válido e não precisamos fixar posição.
+  const tray = new Tray(iconPath);
   const refresh = () => {
     try {
       tray.setToolTip(`PrintBridge v${version} — ${cb.getStatus()}`);

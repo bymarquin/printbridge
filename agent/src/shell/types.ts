@@ -15,7 +15,7 @@ export interface TrayLike {
 }
 
 export interface TrayCtor {
-  new (icon: string, guid?: string): TrayLike;
+  new (icon: string): TrayLike;
 }
 
 export interface MenuLike {
