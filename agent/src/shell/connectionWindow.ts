@@ -1,3 +1,5 @@
+import { BRAND_CSS, brandHead, logoDataUrl } from "./brand.js";
+
 export interface ConnectionWindowDeps {
   BrowserWindow: new (opts: Record<string, unknown>) => {
     loadURL(url: string): Promise<void>;
@@ -21,16 +23,17 @@ export function buildConnectionHtml(opts: { configPath: string; apiUrl: string }
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
 <title>PrintBridge — Conexão</title>
 <style>
-*{box-sizing:border-box}body{font-family:Inter,"Segoe UI",Arial,sans-serif;background:#09090b;color:#f4f4f5;margin:0;padding:20px}
-.card{background:#18181b;border:1px solid #27272a;border-radius:12px;padding:20px;max-width:440px;margin:0 auto}
-h1{font-size:16px;margin:0}.row{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #27272a;font-size:13px}
+${BRAND_CSS}
+.row{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #27272a;font-size:13px}
 .row:last-child{border-bottom:0}.k{color:#a1a1aa}.v{color:#fafafa;word-break:break-all;text-align:right}
 .ok{color:#6ee7b7}.bad{color:#fca5a5}
-button{width:100%;height:40px;margin-top:12px;border-radius:6px;font-weight:700;font-size:14px;cursor:pointer;border:0}
+button{width:100%;height:42px;margin-top:12px;border-radius:8px;font-weight:800;font-size:14px;cursor:pointer;border:0}
 #swap{background:#27272a;color:#fafafa}#swap:hover{background:#3f3f46}
 #close{background:#fafafa;color:#09090b}#close:hover{background:#e4e4e7}
 #msg{font-size:12px;color:#a1a1aa;margin-top:8px;min-height:16px}
 </style></head><body>
+<div class="wrap">
+${brandHead(logoDataUrl())}
 <div class="card">
 <h1>Conexão</h1>
 <div class="row"><span class="k">Servidor</span><span class="v" id="api">…</span></div>

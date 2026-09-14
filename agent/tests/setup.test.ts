@@ -39,10 +39,11 @@ describe("instalação fácil", () => {
 
   it("assistente gera HTML com campos e caminho embutido", () => {
     const html = buildSetupHtml({ configPath: "C:\\cfg\\config.json", apiUrl: "https://x" });
-    expect(html).toContain("Endereço da API");
+    expect(html).toContain("Servidor");
     expect(html).toContain("Chave de instalação");
     expect(html).toContain("C:\\\\cfg\\\\config.json"); // JSON-escaped dentro do script
     expect(html).toContain("/print-agent/enroll");
+    expect(html).toContain("data:image/png;base64"); // logotipo embutida
   });
 
   it("openSetupWindow abre data URL com nodeIntegration + travas", async () => {

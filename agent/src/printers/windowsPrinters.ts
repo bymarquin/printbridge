@@ -4,6 +4,8 @@ export interface OsPrinter {
   name: string;
   status: string;
   isDefault: boolean;
+  /** Porta (USB001, WSD-…, IP). Serve à descoberta por prioridade. */
+  port: string;
 }
 
 export interface PrinterLister {
@@ -32,15 +34,16 @@ export class WindowsPrinterLister implements PrinterLister {
 
   async list(): Promise<OsPrinter[]> {
     if (process.platform !== "win32") return [];
-    const ps = `Get-CimInstance Win32_Printer | Select-Object Name,WorkOffline,Default | ConvertTo-Json -Compress`;
+    const ps = `Get-CimInstance Win32_Printer | Select-Object Name,WorkOffline,Default,PortName | ConvertTo-Json -Compress`;
     const out = await runWithTimeout("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", ps], this.timeoutMs);
     try {
       const raw = JSON.parse(out);
       const arr = Array.isArray(raw) ? raw : [raw];
-      return arr.map((p: { Name: string; WorkOffline: boolean; Default: boolean }) => ({
+      return arr.map((p: { Name: string; WorkOffline: boolean; Default: boolean; PortName: string }) => ({
         name: String(p.Name),
         status: p.WorkOffline ? "offline" : "ready",
         isDefault: Boolean(p.Default),
+        port: String(p.PortName ?? ""),
       }));
     } catch {
       throw new Error("resposta Win32_Printer inválida");

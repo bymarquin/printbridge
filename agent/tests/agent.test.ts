@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { LocalQueue } from "../src/infra/localQueue.js";
 import { canTransition } from "../src/domain/jobState.js";
+import { resolvePrinter } from "../src/printers/resolvePrinter.js";
+import { SpoolerHealer } from "../src/printers/spoolerHealer.js";
 import { tick } from "../src/index.js";
 import fs from "node:fs";
 import os from "node:os";
@@ -78,6 +80,53 @@ describe("Agent core", () => {
     expect(q.transition("j6", "pending")?.status).toBe("pending");
     await tick(cfg, q, { executor: exec, poll: (async () => []) as never, report: (async () => {}) as never });
     expect(exec.execute).toHaveBeenCalledTimes(1);
+    q.close();
+  });
+
+  it("descoberta: exata > USB única > default > única > passthrough", () => {
+    const usb = { name: "Bematech", isDefault: false, port: "USB001" };
+    const net = { name: "HP Rede", isDefault: true, port: "WSD-1" };
+    expect(resolvePrinter("Bematech", [usb, net])).toBe("Bematech"); // exata
+    expect(resolvePrinter("cozinha", [usb])).toBe("Bematech"); // USB única, sem mapear
+    expect(resolvePrinter("", [usb, net])).toBe("Bematech"); // USB única ganha da default (geralmente PDF virtual)
+    expect(resolvePrinter("", [net, { ...usb, name: "Bem2" }])).toBe("Bem2"); // 1 USB > default
+    expect(resolvePrinter("", [{ ...usb, name: "B1" }, { ...usb, name: "Bem2" }, net])).toBe("HP Rede"); // 2 USB: cai na default
+    expect(resolvePrinter("x", [{ name: "Só", isDefault: false }])).toBe("Só"); // única
+    expect(resolvePrinter("x", [usb, net], "Balcao")).toBe("Bematech"); // USB única vence até o passthrough
+    expect(resolvePrinter("x", [{ name: "A", isDefault: false }, { name: "B", isDefault: false }], "Balcao")).toBe("x"); // sem match: erro real da spool
+    expect(resolvePrinter("", [], "Balcao")).toBe("Balcao");
+    expect(resolvePrinter("", [])).toBe("");
+  });
+
+  it("healer: 3 falhas disparam cura, sucesso zera, cooldown segura", async () => {
+    const runs: string[] = [];
+    const h = new SpoolerHealer("win32", async (c, a) => { runs.push(c + " " + a.join(" ")); });
+    expect(h.recordFailure()).toBe(false);
+    expect(h.recordFailure()).toBe(false);
+    expect(h.recordFailure()).toBe(true);
+    expect(await h.heal(() => {})).toBe(true);
+    expect(runs).toEqual(["net stop spooler", "net start spooler"]);
+    expect(await h.heal(() => {})).toBe(false); // cooldown
+    h.recordSuccess();
+    expect(h.recordFailure()).toBe(false); // zerou
+    const linux = new SpoolerHealer("linux", async () => { throw new Error("nunca"); });
+    linux.recordFailure(); linux.recordFailure(); linux.recordFailure();
+    expect(await linux.heal(() => {})).toBe(false);
+  });
+
+  it("tick aceita resolvePrinter (loja 1 impressora: qualquer nome cai nela)", async () => {
+    const q = new LocalQueue(tmpDb());
+    q.upsert({ jobId: "j7", payloadType: "raw" as const, payloadBase64: "eA==", printerId: "nome-errado", copies: 1 });
+    const seen: string[] = [];
+    const executor = { execute: vi.fn(async (t: { printerName: string }) => { seen.push(t.printerName); }) };
+    const cfg = { apiBaseUrl: "http://x", token: "t", pollIntervalMs: 10000, dbPath: ":memory:" } as never;
+    await tick(cfg, q, {
+      executor,
+      poll: (async () => []) as never,
+      report: (async () => {}) as never,
+      resolvePrinter: () => "Unica",
+    });
+    expect(seen[0]).toBe("Unica");
     q.close();
   });
 });

@@ -3,8 +3,10 @@ import { enrollAgent, loadConfig, loadEffectiveConfig, saveFileConfig } from "./
 import { pollPendingJobs, reportStatus, syncPrinters } from "./api/client.js";
 import { AgentWs } from "./api/wsClient.js";
 import { LocalQueue } from "./infra/localQueue.js";
-import { WindowsPrinterLister } from "./printers/windowsPrinters.js";
+import { WindowsPrinterLister, type OsPrinter } from "./printers/windowsPrinters.js";
 import { WindowsPrintExecutor } from "./printers/printExecutor.js";
+import { resolvePrinter } from "./printers/resolvePrinter.js";
+import { SpoolerHealer } from "./printers/spoolerHealer.js";
 
 const HEARTBEAT_MS = 30_000;
 
@@ -12,6 +14,10 @@ export interface TickDeps {
   executor?: { execute(args: { payloadType: "pdf" | "raw"; payloadBase64: string; printerName: string; copies: number }): Promise<void> };
   poll?: typeof pollPendingJobs;
   report?: typeof reportStatus;
+  /** Resolve destino final; default: nome do job ou defaultPrinter. */
+  resolvePrinter?: (printerId: string) => string;
+  onPrintSuccess?: () => void;
+  onPrintError?: (message: string) => void;
 }
 
 export async function tick(cfg: ReturnType<typeof loadConfig>, queue: LocalQueue, deps: TickDeps = {}): Promise<void> {
@@ -46,8 +52,9 @@ export async function tick(cfg: ReturnType<typeof loadConfig>, queue: LocalQueue
       console.error("[agent] report printing", (e as Error).message),
     );
     try {
-      // O job manda; default é só fallback se printerId vier vazio.
-      const printer = local.printerId || cfg.defaultPrinter;
+      // O job manda; com 1 impressora na loja, qualquer nome cai nela (zero mapeamento).
+      const resolve = deps.resolvePrinter ?? ((wanted: string) => wanted || cfg.defaultPrinter || "");
+      const printer = resolve(local.printerId);
       if (!printer) throw new Error("sem impressora (job sem printerId e sem DEFAULT_PRINTER)");
       await executor.execute({ payloadType: local.payloadType, payloadBase64: local.payloadBase64, printerName: printer, copies: local.copies });
       queue.transition(local.jobId, "completed");
@@ -55,25 +62,28 @@ export async function tick(cfg: ReturnType<typeof loadConfig>, queue: LocalQueue
         console.error("[agent] report completed", (e as Error).message),
       );
       queue.remove(local.jobId);
+      deps.onPrintSuccess?.();
     } catch (e) {
       const msg = (e as Error).message;
       queue.transition(local.jobId, "failed", msg);
       await report(cfg, local.jobId, "failed", msg).catch((err) =>
         console.error("[agent] report failed", (err as Error).message),
       );
+      deps.onPrintError?.(msg);
     }
   }
 }
 
 export async function heartbeat(
   cfg: ReturnType<typeof loadConfig>,
-  lister: { list(): Promise<Array<{ name: string; isDefault: boolean; status: string }>> } = new WindowsPrinterLister(),
-): Promise<void> {
+  lister: { list(): Promise<OsPrinter[]> } = new WindowsPrinterLister(),
+): Promise<OsPrinter[]> {
   const printers = await lister.list().catch(() => []);
-  if (printers.length === 0) return;
+  if (printers.length === 0) return [];
   await syncPrinters(cfg, printers.map((p) => ({ name: p.name, isDefault: p.isDefault, status: p.status }))).catch((e) =>
     console.error("[agent] heartbeat", (e as Error).message),
   );
+  return printers;
 }
 
 export interface AgentRuntime {
@@ -86,7 +96,7 @@ export interface AgentRuntime {
 
 export type StartDeps = TickDeps & {
   heartbeatMs?: number;
-  lister?: { list(): Promise<Array<{ name: string; isDefault: boolean; status: string }>> };
+  lister?: { list(): Promise<OsPrinter[]> };
 };
 
 /** Sobe o núcleo (WS + heartbeat + poll). Usado pelo CLI e pelo shell Electron. */
@@ -98,16 +108,37 @@ export function startAgent(
   // Reaper de boot: crash/kill/update anterior pode ter preso jobs em voo.
   const requeued = queue.requeueStale(10 * 60_000);
   if (requeued > 0) console.log(`[agent] reaper: ${requeued} job(s) travado(s) -> pending`);
+  // Última lista do Windows alimenta a descoberta por prioridade.
+  let lastSeen: OsPrinter[] = [];
+  const runHeartbeat = async () => {
+    const list = await heartbeat(cfg, deps.lister);
+    if (list.length > 0) lastSeen = list;
+  };
+  const healer = new SpoolerHealer();
   let lastTick: string | null = null;
+  const pickPrinter = (wanted: string): string =>
+    resolvePrinter(wanted, lastSeen, cfg.defaultPrinter, (m) => console.log(`[agent] ${m}`));
   const runTick = async () => {
-    await tick(cfg, queue, deps);
+    await tick(cfg, queue, {
+      ...deps,
+      resolvePrinter: pickPrinter,
+      onPrintSuccess: () => healer.recordSuccess(),
+      onPrintError: (msg) => {
+        if (healer.recordFailure()) {
+          void healer.heal((m) => console.log(m)).then((healed) => {
+            if (healed) void runTick(); // tenta de novo após curar
+          });
+        }
+        deps.onPrintError?.(msg);
+      },
+    });
     lastTick = new Date().toISOString();
   };
   const ws = new AgentWs(cfg, () => void runTick());
   ws.start();
-  void heartbeat(cfg, deps.lister);
+  void runHeartbeat();
   const hbMs = deps.heartbeatMs ?? HEARTBEAT_MS;
-  const hb = setInterval(() => void heartbeat(cfg, deps.lister), hbMs);
+  const hb = setInterval(() => void runHeartbeat(), hbMs);
   void runTick();
   const poll = setInterval(() => void runTick(), cfg.pollIntervalMs);
   console.log(`[agent] rodando -> ${cfg.apiBaseUrl} (poll ${cfg.pollIntervalMs}ms)`);

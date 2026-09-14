@@ -3,8 +3,11 @@ import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
 
+/** Servidor oficial — o agente já nasce apontando para o PrintBridge. */
+export const DEFAULT_API_URL = "https://printbridge.duckdns.org";
+
 const configSchema = z.object({
-  apiBaseUrl: z.string().url().default("http://localhost:3001"),
+  apiBaseUrl: z.string().url().default(DEFAULT_API_URL),
   token: z.string().default(""),
   pollIntervalMs: z.coerce.number().int().min(2000).default(10000),
   dbPath: z.string().default("./data/agent.db"),
@@ -47,7 +50,7 @@ export function saveFileConfig(partial: FileConfig, filePath: string = configFil
 /** Env (legado/CI) tem precedência sobre o arquivo. */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
   return configSchema.parse({
-    apiBaseUrl: env.PRINTBRIDGE_API ?? "http://localhost:3001",
+    apiBaseUrl: env.PRINTBRIDGE_API ?? DEFAULT_API_URL,
     token: env.PRINT_AGENT_TOKEN ?? "",
     pollIntervalMs: env.POLL_INTERVAL_MS ?? 10000,
     dbPath: env.AGENT_DB ?? "./data/agent.db",

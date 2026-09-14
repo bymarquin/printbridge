@@ -1,3 +1,5 @@
+import { BRAND_CSS, brandHead, logoDataUrl } from "./brand.js";
+
 export interface SetupWindowDeps {
   BrowserWindow: new (opts: Record<string, unknown>) => {
     loadURL(url: string): Promise<void>;
@@ -20,28 +22,20 @@ export function buildSetupHtml(opts: { configPath: string; apiUrl: string }): st
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
 <title>PrintBridge — Configuração</title>
 <style>
-*{box-sizing:border-box}body{font-family:Inter,"Segoe UI",Arial,sans-serif;background:#09090b;color:#f4f4f5;margin:0;padding:24px;display:flex;justify-content:center}
-.wrap{width:100%;max-width:420px}.brand{display:flex;align-items:center;gap:10px;margin:8px 0 4px}
-.dot{width:36px;height:36px;border-radius:10px;background:#2dd4bf;color:#09090b;font-weight:800;font-size:18px;display:flex;align-items:center;justify-content:center}
-.brand b{font-size:17px;letter-spacing:-.02em}.brand small{display:block;color:#a1a1aa;font-size:12px;font-weight:400}
-.card{background:#18181b;border:1px solid #27272a;border-radius:12px;padding:20px;margin-top:16px}
-h1{font-size:18px;margin:0;letter-spacing:-.01em}.sub{color:#a1a1aa;font-size:13px;margin:4px 0 0}
-label{display:block;margin:14px 0 6px;font-size:12px;font-weight:500;color:#a1a1aa}
-input[type=text]{width:100%;height:40px;padding:0 12px;border-radius:6px;border:1px solid #3f3f46;background:#09090b;color:#f4f4f5;font-size:14px;outline:none}
-input[type=text]:focus{border-color:#fafafa}
+${BRAND_CSS}
 .check{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;color:#d4d4d8;cursor:pointer}
-button#go{width:100%;height:40px;margin-top:16px;background:#fafafa;border:0;color:#09090b;font-weight:700;font-size:14px;border-radius:6px;cursor:pointer}
-button#go:hover{background:#e4e4e7}button#go:disabled{opacity:.6;cursor:wait}
-#error{color:#fca5a5;margin-top:12px;font-size:13px;white-space:pre-wrap}
-#ok{color:#6ee7b7;margin-top:12px;font-size:13px}
+button#go{width:100%;height:42px;margin-top:16px;background:#fafafa;border:0;color:#09090b;font-weight:800;font-size:14px;border-radius:8px;cursor:pointer}
+button#go:hover{background:#e4e4e7}
 </style></head><body>
 <div class="wrap">
-<div class="brand"><div class="dot">P</div><div><b>PrintBridge</b><small>Impressão para estabelecimentos</small></div></div>
+${brandHead(logoDataUrl())}
 <div class="card">
 <h1>Bem-vindo(a)</h1>
 <p class="sub">Conecte este computador ao servidor da loja. Precisa só uma vez.</p>
-<label>Endereço da API</label>
-<input id="api" type="text" placeholder="URL da sua API">
+<label>Servidor</label>
+<p style="margin:0 0 4px;font-size:14px;color:#fafafa" id="apiFixed"></p>
+<a href="#" id="apiChange" style="font-size:12px;color:#71717a">trocar servidor (avançado)</a>
+<input id="api" type="text" style="display:none" placeholder="URL da sua API">
 <label>Chave de instalação</label><input id="setupKey" type="text">
 <label>Nome deste computador</label><input id="label" type="text" placeholder="Nome do seu computador">
 <button id="go">Conectar</button>
@@ -54,6 +48,13 @@ const fs = require('fs'), path = require('path');
 const normalizeApi = (v) => v.trim().replace(/\/$/,'')
   .replace(/\/print-agent(\/enroll)?\/?$/,'') || v.trim();
 document.getElementById('api').value = CFG.apiUrl;
+document.getElementById('apiFixed').textContent = CFG.apiUrl;
+try { document.getElementById('label').value = require('os').hostname(); } catch(e) {}
+document.getElementById('apiChange').onclick = function(e){
+  e.preventDefault();
+  const inp = document.getElementById('api');
+  inp.style.display = inp.style.display === 'none' ? 'block' : 'none';
+};
 document.getElementById('go').onclick = async function(){
   const err = document.getElementById('error'), ok = document.getElementById('ok');
   err.textContent = ''; ok.textContent = 'Conectando…';
@@ -74,8 +75,8 @@ document.getElementById('go').onclick = async function(){
     fs.writeFileSync(CFG.configPath,
       JSON.stringify(Object.assign({}, prev, { apiBaseUrl: api, token }), null, 2),
       { mode: 0o600 });
-    ok.textContent = '✅ Conectado! O agente vai iniciar sozinho.';
-  } catch(e) { ok.textContent = ''; err.textContent = '❌ ' + (e.message || e); }
+    ok.textContent = 'Conectado. O agente vai iniciar sozinho.';
+  } catch(e) { ok.textContent = ''; err.textContent = (e.message || e); }
 };
 })();
 </script></body></html>`;
