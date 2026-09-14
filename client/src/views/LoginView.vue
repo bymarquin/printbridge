@@ -31,7 +31,7 @@ async function entrar() {
 
 <template>
   <main class="flex min-h-screen items-center justify-center bg-zinc-950 px-4">
-    <Card class="w-full max-w-sm">
+    <div class="w-full max-w-sm">
       <img :src="logoStacked" alt="PrintBridge" class="mx-auto h-24" />
       <h1 class="mt-4 text-center text-lg font-semibold tracking-tight text-white">Bem-vindo(a) de volta</h1>
       <p class="mt-1 text-center text-sm text-zinc-400">Entre com sua chave owner para gerenciar lojas e impressoras.</p>
@@ -39,6 +39,6 @@ async function entrar() {
         <Input v-model="key" type="password" label="Chave owner" placeholder="Sua chave owner" @keyup.enter="entrar" />
         <Button class="w-full" @click="entrar">Entrar</Button>
       </div>
-    </Card>
+    </div>
   </main>
 </template>
