@@ -10,7 +10,6 @@ const route = useRoute()
 const router = useRouter()
 const session = useSession()
 const menuAberto = ref(false)
-const avatarUrl = 'https://api.dicebear.com/9.x/initials/svg?seed=PrintBridge&backgroundColor=27272a'
 
 const links = [
   { name: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -39,8 +38,9 @@ function sair() {
           <img :src="logoHorizontal" alt="PrintBridge" class="h-9" />
         </div>
         <div class="relative">
-          <button @click="menuAberto = !menuAberto" title="Perfil"            class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-zinc-800 hover:bg-zinc-700">
-            <img :src="avatarUrl" alt="Perfil" class="h-8 w-8" />
+          <button @click="menuAberto = !menuAberto" title="Perfil"
+            class="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-700 text-xs font-semibold text-white hover:bg-zinc-600">
+            PB
           </button>
           <div v-if="menuAberto" class="absolute right-0 z-50 mt-2 w-44 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900 shadow-2xl">
             <p class="border-b border-zinc-800 px-3 py-2 text-xs text-zinc-400">Dono</p>
