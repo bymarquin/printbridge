@@ -1,6 +1,6 @@
 {
   "name": "@printbridge/agent",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "private": true,
   "description": "PrintBridge Agent (Windows) — core headless desacoplado do Electron",
   "type": "module",
@@ -64,14 +64,12 @@
     "electron-log": "^5.4.4",
     "electron-updater": "^6.8.9",
     "pdf-to-printer": "^5.8.1",
-    "qrcode": "^1.5.4",
     "ws": "^8.18.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.7.0",
-    "@types/qrcode": "^1.5.6",
     "@types/ws": "^8.5.13",
     "electron": "^44.3.0",
     "electron-builder": "^26.15.3",

@@ -21,7 +21,7 @@ const router = createRouter({
         },
         {
           path: 'conexoes', name: 'conexoes', component: () => import('../views/ConexoesView.vue'),
-          meta: { title: 'Conexões', subtitle: 'Agentes online e pareamento.' },
+          meta: { title: 'Conexões', subtitle: 'Agentes online.' },
         },
         {
           path: 'impressoras', name: 'impressoras', component: () => import('../views/ImpressorasView.vue'),

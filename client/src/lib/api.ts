@@ -135,8 +135,6 @@ export const api = {
   createWebhook: (url: string) =>
     call<{ webhook: CreatedWebhook }>('/print-agent/webhooks', { ...s, method: 'POST', body: { url } }),
   deleteWebhook: (id: string) => call<null>(`/print-agent/webhooks/${id}`, { ...s, method: 'DELETE' }),
-  pairApprove: (code: string) =>
-    call<Enrolled & { label: string }>('/print-agent/pairing/approve', { ...s, method: 'POST', body: { code } }),
 
   // loja (bearer do token da loja)
   enqueue: (t: string, input: { idempotencyKey: string; payloadType: 'raw' | 'pdf'; payloadBase64: string; printerId: string; copies: number }) =>

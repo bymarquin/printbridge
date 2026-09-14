@@ -119,27 +119,6 @@ export const openApiDocument = {
         responses: { "204": { description: "revogado" } },
       },
     },
-    "/print-agent/pairing/request": {
-      post: {
-        summary: "Pede código de pareamento (público, rate-limited)",
-        requestBody: { content: { "application/json": { schema: { type: "object", properties: { label: { type: "string" } } } } } },
-        responses: { "201": { description: "{ code, expiresAt }" } },
-      },
-    },
-    "/print-agent/pairing/status": {
-      get: {
-        summary: "Consulta pareamento (público; token entregue 1x)",
-        responses: { "200": { description: "{ status, token?, agentId? }" }, "404": { description: "inválido/expirado" } },
-      },
-    },
-    "/print-agent/pairing/approve": {
-      post: {
-        summary: "Aprova código e cria a loja (owner)",
-        security: [{ setupKey: [] }],
-        requestBody: { content: { "application/json": { schema: { type: "object", properties: { code: { type: "string" } } } } } },
-        responses: { "201": { description: "{ agentId, token, label }" }, "422": { description: "utilizado/expirado" } },
-      },
-    },
     "/print-agent/enroll": {
       post: {
         summary: "Gera token da loja (sessão owner ou setup key)",

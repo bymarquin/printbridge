@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
 import { api, type Agent } from '../lib/api'
 import { useSession } from '../stores/session'
 import { useToast } from '../stores/toast'
@@ -16,33 +15,7 @@ const toast = useToast()
 const agents = ref<Agent[]>([])
 const label = ref('')
 const novoToken = ref('')
-const codigo = ref('')
 const revogando = ref<Agent | null>(null)
-
-async function aprovar() {
-  try {
-    const code = codigo.value.trim().toUpperCase()
-    if (!code) return
-    const d = await api.pairApprove(code)
-    session.saveToken(d.agentId, d.token)
-    novoToken.value = d.token
-    codigo.value = ''
-    toast.success(`Loja ${d.label} pareada`, { description: 'O agente conectou sozinho.' })
-    await carregar()
-    void routerReplaceClean()
-  } catch (e) {
-    toast.error((e as Error).message, { description: 'Confira o código no PC da loja.' })
-  }
-}
-
-/** Limpa o ?code= da URL após usar (magic link de uso único visual). */
-function routerReplaceClean() {
-  const url = new URL(window.location.href)
-  if (url.searchParams.has('code')) {
-    url.searchParams.delete('code')
-    window.history.replaceState({}, '', url.toString())
-  }
-}
 
 async function carregar() {
   try {
@@ -79,12 +52,7 @@ async function revogar(a: Agent) {
   }
 }
 
-onMounted(() => {
-  // Magic link do QR: /app/lojas?code=XXXXXX já vem preenchido.
-  const q = useRoute().query.code
-  if (typeof q === 'string' && q.trim()) codigo.value = q.trim().toUpperCase()
-  void carregar()
-})
+onMounted(() => void carregar())
 </script>
 
 <template>
@@ -98,13 +66,6 @@ onMounted(() => {
     <p v-if="novoToken" class="rounded-xl bg-emerald-950 p-5 text-sm">
       Token (aparece uma vez, já salvo neste navegador):<br /><code class="break-all">{{ novoToken }}</code>
     </p>
-    <Card title="Parear novo agente">
-      <p class="mb-3 text-sm text-zinc-400">No PC da loja, clique em <b class="text-zinc-200">Parear com código</b> e digite aqui as 6 letras — ou escaneie o QR que leva direto pra esta tela.</p>
-      <div class="flex items-end gap-2">
-        <Input v-model="codigo" label="Código de pareamento" placeholder="ABC123" class="grow uppercase" @keyup.enter="aprovar" />
-        <Button @click="aprovar">Aprovar</Button>
-      </div>
-    </Card>
     <Card>
       <Table>
         <thead><tr><th>Loja</th><th>ID</th><th></th></tr></thead>

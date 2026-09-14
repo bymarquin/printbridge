@@ -40,26 +40,11 @@ button#go:hover{background:#e4e4e7}button#go:disabled{opacity:.6;cursor:wait}
 <div class="card">
 <h1>Bem-vindo(a)</h1>
 <p class="sub">Conecte este computador ao servidor da loja. Precisa só uma vez.</p>
-<label>Endereço da API (VPS)</label>
+<label>Endereço da API</label>
 <input id="api" type="text" placeholder="URL da sua API">
-<label class="check"><input id="haveToken" type="checkbox"> Já tenho o token do agente</label>
-<div id="tokenBox" style="display:none">
-<label>Token da sua loja</label><input id="token" type="text">
-</div>
-<div id="enrollBox">
-<label>Chave de instalação (owner)</label><input id="setupKey" type="text">
+<label>Chave de instalação</label><input id="setupKey" type="text">
 <label>Nome deste computador</label><input id="label" type="text" placeholder="Nome do seu computador">
-</div>
 <button id="go">Conectar</button>
-<div style="text-align:center;color:#71717a;font-size:12px;margin:14px 0 4px">— OU —</div>
-<button id="pair" style="background:#27272a;color:#fafafa">Parear com código (mais fácil)</button>
-<div id="pairBox" style="display:none;text-align:center">
-<p style="color:#a1a1aa;font-size:13px">No painel, vá em Lojas → Parear e digite:</p>
-<p id="pairCode" style="font-size:40px;font-weight:800;letter-spacing:.35em;color:#fafafa;margin:8px 0"></p>
-<img id="pairQr" style="width:180px;height:180px;border-radius:8px" alt="QR de pareamento">
-<p style="color:#a1a1aa;font-size:12px">ou abra o link do QR no celular</p>
-<p id="pairWait" style="color:#a1a1aa;font-size:12px">Aguardando aprovação…</p>
-</div>
 <div id="error"></div><div id="ok"></div>
 </div>
 <script>
@@ -68,34 +53,21 @@ const CFG = ${injected};
 const fs = require('fs'), path = require('path');
 const normalizeApi = (v) => v.trim().replace(/\/$/,'')
   .replace(/\/print-agent(\/enroll)?\/?$/,'') || v.trim();
-document.getElementById('haveToken').onchange = function(e){
-  document.getElementById('tokenBox').style.display = e.target.checked ? 'block' : 'none';
-  document.getElementById('enrollBox').style.display = e.target.checked ? 'none' : 'block';
-};
 document.getElementById('api').value = CFG.apiUrl;
 document.getElementById('go').onclick = async function(){
   const err = document.getElementById('error'), ok = document.getElementById('ok');
   err.textContent = ''; ok.textContent = 'Conectando…';
   try {
     const api = normalizeApi(document.getElementById('api').value);
-    if (!/^https?:\\/\\//.test(api)) throw new Error('endereço inválido — use https://sua-api (somente o início, sem /print-agent/...)');
-    let token;
-    if (document.getElementById('haveToken').checked) {
-      token = document.getElementById('token').value.trim();
-      if (!token) throw new Error('cole o token do agente');
-      const r = await fetch(api + '/print-agent/jobs?limit=1', { headers: { Authorization: 'Bearer ' + token } });
-      if (r.status === 401) throw new Error('token inválido');
-      if (!r.ok) throw new Error('API respondeu HTTP ' + r.status);
-    } else {
-      const setupKey = document.getElementById('setupKey').value.trim();
-      const label = document.getElementById('label').value.trim() || 'loja';
-      const r = await fetch(api + '/print-agent/enroll', { method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-setup-key': setupKey },
-        body: JSON.stringify({ label }) });
-      if (r.status === 403) throw new Error('chave de instalação inválida');
-      if (!r.ok) throw new Error('enroll falhou: HTTP ' + r.status);
-      token = (await r.json()).token;
-    }
+    if (!/^https?:\/\//.test(api)) throw new Error('endereço inválido — use https://sua-api');
+    const setupKey = document.getElementById('setupKey').value.trim();
+    const label = document.getElementById('label').value.trim() || 'loja';
+    const r = await fetch(api + '/print-agent/enroll', { method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-setup-key': setupKey },
+      body: JSON.stringify({ label }) });
+    if (r.status === 403) throw new Error('chave de instalação inválida');
+    if (!r.ok) throw new Error('falhou: HTTP ' + r.status);
+    const token = (await r.json()).token;
     fs.mkdirSync(path.dirname(CFG.configPath), { recursive: true });
     let prev = {};
     try { prev = JSON.parse(fs.readFileSync(CFG.configPath, 'utf8')); } catch(e) {}
@@ -104,42 +76,6 @@ document.getElementById('go').onclick = async function(){
       { mode: 0o600 });
     ok.textContent = '✅ Conectado! O agente vai iniciar sozinho.';
   } catch(e) { ok.textContent = ''; err.textContent = '❌ ' + (e.message || e); }
-};
-document.getElementById('pair').onclick = async function(){
-  const err = document.getElementById('error'), ok = document.getElementById('ok');
-  err.textContent = ''; ok.textContent = '';
-  try {
-    const api = normalizeApi(document.getElementById('api').value);
-    if (!/^https?:\/\//.test(api)) throw new Error('preencha o endereço da API primeiro');
-    const label = document.getElementById('label').value.trim() || 'loja';
-    const r = await fetch(api + '/print-agent/pairing/request', { method: 'POST',
-      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label }) });
-    if (!r.ok) throw new Error('não foi possível gerar o código (HTTP ' + r.status + ')');
-    const data = await r.json();
-    document.getElementById('pairBox').style.display = 'block';
-    document.getElementById('pairCode').textContent = data.code;
-    const link = api + '/app/lojas?code=' + data.code;
-    const QRCode = require('qrcode');
-    document.getElementById('pairQr').src = await QRCode.toDataURL(link, { width: 360, margin: 1 });
-    const timer = setInterval(async function(){
-      try {
-        const s = await fetch(api + '/print-agent/pairing/status?code=' + data.code);
-        if (s.status === 429) return; // rate limit: tenta de novo no próximo ciclo
-        if (!s.ok) { clearInterval(timer); err.textContent = '❌ código expirado — gere outro'; return; }
-        const st = await s.json();
-        if (st.status === 'approved' && st.token) {
-          clearInterval(timer);
-          fs.mkdirSync(path.dirname(CFG.configPath), { recursive: true });
-          let prev = {};
-          try { prev = JSON.parse(fs.readFileSync(CFG.configPath, 'utf8')); } catch(e) {}
-          fs.writeFileSync(CFG.configPath,
-            JSON.stringify(Object.assign({}, prev, { apiBaseUrl: api, token: st.token }), null, 2),
-            { mode: 0o600 });
-          ok.textContent = '✅ Pareado! O agente vai iniciar sozinho.';
-        }
-      } catch(e) { /* tenta de novo no próximo ciclo */ }
-    }, 3000);
-  } catch(e) { err.textContent = '❌ ' + (e.message || e); }
 };
 })();
 </script></body></html>`;
@@ -158,7 +94,7 @@ export function openSetupWindow(
 ): SetupHandle {
   const win = new deps.BrowserWindow({
     width: 520,
-    height: 780,
+    height: 600,
     resizable: false,
     autoHideMenuBar: true,
     title: "PrintBridge — Configuração",

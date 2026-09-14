@@ -99,15 +99,6 @@ export function migrate(database: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_sessions_access ON sessions(access_hash);
     CREATE INDEX IF NOT EXISTS idx_sessions_refresh ON sessions(refresh_hash);
 
-    CREATE TABLE IF NOT EXISTS pairing_codes (
-      code TEXT PRIMARY KEY,
-      label TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','consumed')),
-      agent_id TEXT REFERENCES agents(id) ON DELETE SET NULL,
-      token TEXT,
-      expires_at TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-    );
   `);
   // Colunas de escopo por loja (adicionadas após o MVP inicial).
   ensureColumn(database, "print_jobs", "agent_id", "TEXT REFERENCES agents(id) ON DELETE SET NULL");

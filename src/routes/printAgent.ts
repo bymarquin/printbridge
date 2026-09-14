@@ -11,14 +11,8 @@ import {
 } from "../infra/printJobRepository.js";
 import { createAgent, hashToken, listAgents, revokeAgent } from "../infra/tokenStore.js";
 import { agentAuth, agentOrOwnerAuth, isOwner, ownerAuth, type AuthedRequest } from "../middleware/auth.js";
-import { pairLimit, pairStatusLimit } from "../middleware/rateLimit.js";
 import type { PrintJob } from "../domain/printJob.js";
 import type { PrintProvider } from "../services/provider.js";
-import {
-  approvePairing,
-  pollPairing,
-  requestPairing,
-} from "../services/pairing.js";
 import {
   createWebhook,
   deleteWebhook,
@@ -112,46 +106,6 @@ export function printAgentRouter(provider: PrintProvider): Router {
     const token = `pb_${randomBytes(24).toString("hex")}`;
     const agent = createAgent(label.data.label, hashToken(token));
     res.status(201).json({ agentId: agent.id, token });
-  });
-
-  // ---- Pareamento por código (público, com rate limit): agente exibe, dono aprova ----
-  r.post("/pairing/request", pairLimit, (req, res) => {
-    const parsed = z.object({ label: z.string().min(1).max(64) }).safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: "label ausente" });
-      return;
-    }
-    try {
-      res.status(201).json(requestPairing(parsed.data.label));
-    } catch (e) {
-      res.status(500).json({ error: "internal error" });
-    }
-  });
-
-  r.get("/pairing/status", pairStatusLimit, (req, res) => {
-    const code = z.string().min(1).max(16).safeParse(req.query.code);
-    if (!code.success) {
-      res.status(400).json({ error: "code ausente" });
-      return;
-    }
-    try {
-      res.json(pollPairing(code.data));
-    } catch (e) {
-      res.status(404).json({ error: (e as Error).message });
-    }
-  });
-
-  r.post("/pairing/approve", ownerAuth, (req, res) => {
-    const parsed = z.object({ code: z.string().min(1).max(16) }).safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: "code ausente" });
-      return;
-    }
-    try {
-      res.status(201).json(approvePairing(parsed.data.code));
-    } catch (e) {
-      res.status(422).json({ error: (e as Error).message });
-    }
   });
 
   // ---- Owner (painel admin): antes do agentAuth ----
