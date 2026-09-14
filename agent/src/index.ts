@@ -1,3 +1,4 @@
+import { pathToFileURL } from "node:url";
 import { enrollAgent, loadConfig, loadEffectiveConfig, saveFileConfig } from "./config.js";
 import { pollPendingJobs, reportStatus, syncPrinters } from "./api/client.js";
 import { AgentWs } from "./api/wsClient.js";
@@ -164,4 +165,11 @@ async function main(): Promise<void> {
   startAgent(cfg);
 }
 
-if (process.env.VITEST !== "true") void main();
+// Roda o CLI só quando executado direto (node dist/index.js).
+// Importado no Electron (entry) ou nos testes, NÃO executa — senão o app
+// se matava no boot antes do assistente abrir.
+const isMainEntry =
+  !!process.argv[1] &&
+  !process.versions.electron &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+if (process.env.VITEST !== "true" && isMainEntry) void main();
