@@ -1,6 +1,6 @@
 {
   "name": "@printbridge/agent",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "description": "PrintBridge Agent (Windows) — core headless desacoplado do Electron",
   "type": "module",
@@ -18,9 +18,20 @@
   "build": {
     "appId": "br.printbridge.agent",
     "productName": "PrintBridge Agent",
+    "directories": { "output": "release" },
     "files": [
       "dist/**/*",
-      "assets/**/*"
+      "assets/**/*",
+      "node_modules/**/*",
+      "package.json",
+      "!**/*.{md,map,ts}",
+      "!node_modules/better-sqlite3/prebuilds/{darwin-*,linux-*}",
+      "!node_modules/.bin"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node",
+      "**/SumatraPDF*.exe"
     ],
     "win": {
       "target": [

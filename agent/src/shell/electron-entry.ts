@@ -14,6 +14,8 @@ import { checkForUpdates, wireAutoInstall, type UpdaterLike } from "./updater.js
 import type { AppLike, MenuLike, TrayCtor } from "./types.js";
 
 const req = createRequire(import.meta.url);
+// Tray-only: sem janela pesada, GPU só gastaria RAM no notebook da loja.
+(req("electron") as { app: { disableHardwareAcceleration(): void } }).app.disableHardwareAcceleration();
 const { app, Tray, Menu, BrowserWindow, shell, dialog } = req("electron") as {
   app: AppLike & {
     getPath(n: string): string;
