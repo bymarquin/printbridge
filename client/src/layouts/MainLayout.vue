@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Bell, BookOpen, CircleUserRound, LayoutDashboard, ListOrdered, Plug, Printer, Store } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
+import logoHorizontal from '../assets/images/logo-horizontal.png'
 import { useSession } from '../stores/session'
 
 const route = useRoute()
@@ -27,13 +28,7 @@ function sair() {
     <div class="mx-auto max-w-6xl px-4 pb-10">
       <header class="flex items-center justify-between py-4">
         <div class="flex items-center gap-2">
-          <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-400 text-zinc-950">
-            <Printer :size="20" />
-          </span>
-          <div>
-            <p class="font-bold leading-tight text-white">PrintBridge</p>
-            <p class="text-xs text-zinc-400">Impressão para estabelecimentos</p>
-          </div>
+          <img :src="logoHorizontal" alt="PrintBridge" class="h-9" />
         </div>
         <div class="flex items-center gap-3">
           <Bell :size="20" class="text-zinc-400" />

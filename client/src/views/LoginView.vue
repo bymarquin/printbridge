@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import logoStacked from '../assets/images/logo-stacked.png'
 import { useToast } from '../stores/toast'
 import { Printer } from 'lucide-vue-next'
 import { api, ApiError } from '../lib/api'
@@ -32,8 +33,8 @@ async function entrar() {
 <template>
   <main class="flex min-h-screen items-center justify-center bg-zinc-950 px-4">
     <Card class="w-full max-w-sm text-center">
-      <h1 class="flex items-center justify-center gap-2 text-2xl font-bold text-white"><Printer :size="24" /> PrintBridge</h1>
-      <p class="mt-1 text-sm text-zinc-400">Painel do dono — cole a chave owner</p>
+      <img :src="logoStacked" alt="PrintBridge" class="mx-auto h-28" />
+      <p class="mt-3 text-sm text-zinc-400">Painel do dono — cole a chave owner</p>
       <Input v-model="key" type="password" placeholder="Sua chave owner" class="mt-4" @keyup.enter="entrar" />
       <Button class="mt-3 w-full" @click="entrar">Entrar</Button>
     </Card>

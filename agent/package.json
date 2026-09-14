@@ -26,6 +26,7 @@
       "target": [
         "nsis"
       ],
+      "icon": "assets/tray.ico",
       "artifactName": "PrintBridge-Agent-${version}-setup.exe"
     },
     "nsis": {
