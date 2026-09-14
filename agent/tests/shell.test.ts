@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { configureAutostart } from "../src/shell/autostart.js";
 import { buildTray } from "../src/shell/tray.js";
+import { createDiagnoseWindow } from "../src/shell/diagnoseWindow.js";
 import { checkForUpdates, wireAutoInstall } from "../src/shell/updater.js";
 import { LocalQueue } from "../src/infra/localQueue.js";
 import { createLogger, logFilePath } from "../src/infra/logger.js";
@@ -98,6 +99,24 @@ describe("shell", () => {
     const broken = { autoDownload: false, checkForUpdates: async () => { throw new Error("rede"); }, quitAndInstall: vi.fn(), on: vi.fn() };
     expect(await checkForUpdates(broken, log)).toBe("error");
     expect(log.error).toHaveBeenCalledOnce();
+  });
+
+  it("diagnóstico narra etapas e falha sem fechar", async () => {
+    const calls: string[] = [];
+    let url = "";
+    class FakeWin {
+      constructor(_o: Record<string, unknown>) {}
+      async loadURL(u: string) { url = u; }
+      isDestroyed() { return false; }
+      webContents = { executeJavaScript: async (c: string) => { calls.push(c); } };
+    }
+    const diag = await createDiagnoseWindow(FakeWin as never);
+    expect(url.startsWith("data:text/html")).toBe(true);
+    await diag.step("config", true, "token presente");
+    await diag.step("tray", false);
+    await diag.fail("Parou aqui:\nboom");
+    expect(calls.some((c) => c.includes("token presente"))).toBe(true);
+    expect(calls.some((c) => c.includes("Parou aqui"))).toBe(true);
   });
 
   it("logger fallback escreve em arquivo com rotação", () => {

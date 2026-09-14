@@ -8,6 +8,7 @@ import { configFilePath, loadEffectiveConfig, loadFileConfig } from "../config.j
 import { createLogger, type Logger } from "../infra/logger.js";
 import { startAgent, type AgentRuntime } from "../index.js";
 import { configureAutostart } from "./autostart.js";
+import { createDiagnoseWindow, type DiagnoseHandle } from "./diagnoseWindow.js";
 import { openSetupWindow } from "./setupWindow.js";
 import { buildTray } from "./tray.js";
 import { checkForUpdates, wireAutoInstall, type UpdaterLike } from "./updater.js";
@@ -32,6 +33,7 @@ const { app, Tray, Menu, BrowserWindow, shell, dialog } = req("electron") as {
     webContents: {
       on(event: string, fn: (e: { preventDefault(): void }) => void): void;
       setWindowOpenHandler(fn: () => { action: "deny" }): void;
+      executeJavaScript(code: string): Promise<unknown>;
     };
   };
   shell: { showItemInFolder(p: string): void };
@@ -40,29 +42,44 @@ const { app, Tray, Menu, BrowserWindow, shell, dialog } = req("electron") as {
 
 const TRAY_REFRESH_MS = 5_000;
 const SETUP_POLL_MS = 1_500;
+// "--diagnose" (ou env): abre janela narrando o boot e NÃO sai em falha,
+// para o usuário fotografar onde travou.
+const DIAGNOSE = process.argv.includes("--diagnose") || process.env.PRINTBRIDGE_DIAGNOSE === "1";
 
 async function boot(): Promise<void> {
   const log = createLogger("agent");
+  let diag: DiagnoseHandle | null = null;
+  const step = async (name: string, ok: boolean, detail?: string): Promise<void> => {
+    log.info(`${ok ? "ok" : "FALHA"} ${name}${detail ? ` — ${detail}` : ""}`);
+    await diag?.step(name, ok, detail);
+  };
   try {
+    await app.whenReady();
+    if (DIAGNOSE) diag = await createDiagnoseWindow(BrowserWindow);
+
     if (!app.requestSingleInstanceLock()) {
-      app.quit();
+      await step("instância única", false, "outra cópia já roda");
+      if (!diag) app.quit();
       return;
     }
-    await app.whenReady();
+    await step("instância única", true);
 
     // Primeira execução: assistente grava %APPDATA%/PrintBridge Agent/config.json.
     let cfg = loadEffectiveConfig();
+    await step("config", true, cfg.token ? "token presente" : "sem token → assistente");
     if (!cfg.token) {
       await runFirstSetup(log);
       cfg = loadEffectiveConfig();
       if (!cfg.token) {
-        app.quit();
+        if (!diag) app.quit();
         return;
       }
     }
 
     const runtime = startAgent(cfg);
+    await step("agente (fila + WS)", true, cfg.apiBaseUrl);
     configureAutostart(app, true, log);
+    await step("autostart", true);
 
     const handle = buildTray(
       Tray,
@@ -95,15 +112,19 @@ async function boot(): Promise<void> {
       }).catch((e) => log.error("check inicial de update", e));
     setTimeout(() => void checkUpdates(), 60_000);
     setInterval(() => void checkUpdates(), 6 * 3600_000);
+    await step("tray + updater", true);
     log.info(`agente iniciado v${appVersion(app)}`);
+    await diag?.step("rodando — pode fechar esta janela", true);
   } catch (e) {
     // Boot sem tray: nunca falha silencioso — log + diálogo + quit.
     // Exceção: setup cancelado no X — quit silencioso, foi escolha do usuário.
     if (e instanceof SetupCancelled) {
-      app.quit();
+      if (!diag) app.quit();
       return;
     }
     const msg = (e as Error).message;
+    await diag?.fail(`Parou aqui:\n${(e as Error).stack ?? msg}`);
+    if (diag) return; // modo diagnóstico: janela fica aberta p/ foto
     try {
       createLogger("agent").error("boot falhou", e);
     } catch {
