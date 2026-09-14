@@ -5,6 +5,7 @@ import { printAgentRouter } from "./routes/printAgent.js";
 import { LocalQueueProvider } from "./services/localQueueProvider.js";
 import { openApiDocument } from "./openapi.js";
 import { ADMIN_HTML } from "./admin.js";
+import { authRouter } from "./routes/auth.js";
 import { startWebhookSweeper } from "./services/webhooks.js";
 
 export type Broadcaster = (jobId: string, agentId?: string | null) => void;
@@ -28,6 +29,8 @@ export function createApp(onEnqueue?: Broadcaster, opts: { webhookSweeper?: bool
   app.get("/app/admin", (_req, res) => {
     res.type("html").send(ADMIN_HTML);
   });
+
+  app.use("/auth", authRouter());
 
   const provider = new LocalQueueProvider(onEnqueue);
   app.use("/print-agent", printAgentRouter(provider));

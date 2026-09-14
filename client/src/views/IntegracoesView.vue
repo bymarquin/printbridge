@@ -19,7 +19,7 @@ const excluindo = ref<string | null>(null)
 
 async function carregar() {
   try {
-    hooks.value = (await api.webhooks(session.ownerKey)).webhooks
+    hooks.value = (await api.webhooks()).webhooks
   } catch (e) {
     toast.error((e as Error).message, { description: 'Não foi possível carregar os webhooks.' })
   }
@@ -28,7 +28,7 @@ async function carregar() {
 async function assinar() {
   try {
     if (!url.value.trim()) return
-    secret.value = (await api.createWebhook(session.ownerKey, url.value.trim())).webhook.secret
+    secret.value = (await api.createWebhook(url.value.trim())).webhook.secret
     url.value = ''
     toast.success('Webhook assinado', { description: 'Eventos de status serão enviados para a URL.' })
     await carregar()
@@ -39,7 +39,7 @@ async function assinar() {
 
 async function excluir(id: string) {
   try {
-    await api.deleteWebhook(session.ownerKey, id)
+    await api.deleteWebhook(id)
     toast.success('Webhook excluído')
     await carregar()
   } catch (e) {

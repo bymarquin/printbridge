@@ -1,24 +1,31 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
+import type { SessionPair } from '../lib/api'
 
 /**
- * Sessão do dono: chave owner (só na aba) + tokens das lojas (neste navegador).
- * Mesmas chaves do /app/admin legado — os dois painéis compartilham.
+ * Sessão do dono: login persistente (refresh 30d em localStorage),
+ * chave curta rotativa (access 15min em sessionStorage).
+ * Tokens das lojas continuam em localStorage (pb_tokens).
  */
 export const useSession = defineStore('session', () => {
-  const ownerKey = ref(sessionStorage.getItem('pb_owner') ?? '')
+  const accessToken = ref(sessionStorage.getItem('pb_access') ?? '')
+  const refreshToken = ref(localStorage.getItem('pb_refresh') ?? '')
   const tokens = ref<Record<string, string>>(JSON.parse(localStorage.getItem('pb_tokens') ?? '{}'))
 
-  const logged = computed(() => ownerKey.value.length > 0)
+  const logged = computed(() => refreshToken.value.length > 0)
 
-  function login(key: string) {
-    ownerKey.value = key.trim()
-    sessionStorage.setItem('pb_owner', ownerKey.value)
+  function saveSession(pair: SessionPair) {
+    accessToken.value = pair.accessToken
+    refreshToken.value = pair.refreshToken
+    sessionStorage.setItem('pb_access', pair.accessToken)
+    localStorage.setItem('pb_refresh', pair.refreshToken)
   }
 
-  function logout() {
-    ownerKey.value = ''
-    sessionStorage.removeItem('pb_owner')
+  function clear() {
+    accessToken.value = ''
+    refreshToken.value = ''
+    sessionStorage.removeItem('pb_access')
+    localStorage.removeItem('pb_refresh')
   }
 
   function saveToken(agentId: string, token: string) {
@@ -31,5 +38,5 @@ export const useSession = defineStore('session', () => {
     localStorage.setItem('pb_tokens', JSON.stringify(tokens.value))
   }
 
-  return { ownerKey, tokens, logged, login, logout, saveToken, forgetToken }
+  return { accessToken, refreshToken, tokens, logged, saveSession, clear, saveToken, forgetToken }
 })

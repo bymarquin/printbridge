@@ -15,7 +15,7 @@ const printers = ref<Printer[]>([])
 const filtro = ref('')
 
 async function carregar() {
-  printers.value = (await api.printersAll(session.ownerKey)).printers
+  printers.value = (await api.printersAll()).printers
 }
 
 const lista = computed(() => (filtro.value ? printers.value.filter((p) => p.agent === filtro.value) : printers.value))

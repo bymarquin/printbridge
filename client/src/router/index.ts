@@ -41,7 +41,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  if (to.meta.auth && !sessionStorage.getItem('pb_owner')) return '/login'
+  if (to.meta.auth && !localStorage.getItem('pb_refresh')) return { name: 'login' }
   return true
 })
 

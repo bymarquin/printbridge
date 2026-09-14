@@ -2,6 +2,7 @@
 import { Bell, BookOpen, CircleUserRound, LayoutDashboard, ListOrdered, Plug, Printer, Store } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import logoHorizontal from '../assets/images/logo-horizontal.png'
+import { api } from '../lib/api'
 import { useSession } from '../stores/session'
 
 const route = useRoute()
@@ -18,7 +19,9 @@ const links = [
 ] as const
 
 function sair() {
-  session.logout()
+  const refresh = session.refreshToken
+  session.clear()
+  if (refresh) void api.logout(refresh).catch(() => {})
   void router.push({ name: 'login' })
 }
 </script>

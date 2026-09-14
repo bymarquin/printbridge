@@ -85,6 +85,19 @@ export function migrate(database: Database.Database): void {
       created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     );
     CREATE INDEX IF NOT EXISTS idx_deliveries_due ON webhook_deliveries(status, next_attempt_at);
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      subject TEXT NOT NULL,
+      access_hash TEXT NOT NULL UNIQUE,
+      access_expires_at TEXT NOT NULL,
+      refresh_hash TEXT NOT NULL UNIQUE,
+      refresh_expires_at TEXT NOT NULL,
+      revoked INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_sessions_access ON sessions(access_hash);
+    CREATE INDEX IF NOT EXISTS idx_sessions_refresh ON sessions(refresh_hash);
   `);
   // Colunas de escopo por loja (adicionadas após o MVP inicial).
   ensureColumn(database, "print_jobs", "agent_id", "TEXT REFERENCES agents(id) ON DELETE SET NULL");

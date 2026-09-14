@@ -6,7 +6,6 @@ import { useToast } from '../stores/toast'
 import { api, ApiError } from '../lib/api'
 import { useSession } from '../stores/session'
 import Button from '../components/ui/Button.vue'
-import Card from '../components/ui/Card.vue'
 import Input from '../components/ui/Input.vue'
 
 const router = useRouter()
@@ -16,8 +15,13 @@ const key = ref('')
 
 async function entrar() {
   try {
-    await api.agents(key.value.trim())
-    session.login(key.value)
+    if (!key.value.trim()) {
+      toast.warning('Cole sua chave owner', { description: 'Ela é pedida uma única vez.' })
+      return
+    }
+    const data = await api.login(key.value.trim())
+    session.saveSession(data.session)
+    key.value = ''
     void router.push({ name: 'dashboard' })
   } catch (e) {
     if (e instanceof ApiError && e.status === 0) {

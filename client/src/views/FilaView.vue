@@ -23,7 +23,7 @@ let timer = 0
 
 async function carregar() {
   try {
-    jobs.value = (await api.recentJobs(session.ownerKey)).jobs
+    jobs.value = (await api.recentJobs()).jobs
   } catch { /* mantém estado */ }
 }
 
@@ -69,7 +69,7 @@ function conectar() {
 
 onMounted(async () => {
   try {
-    lojas.value = (await api.agents(session.ownerKey)).agents
+    lojas.value = (await api.agents()).agents
     if (lojas.value[0]) { lojaWs.value = lojas.value[0].id; conectar() }
   } catch { /* sem chave */ }
   await carregar()

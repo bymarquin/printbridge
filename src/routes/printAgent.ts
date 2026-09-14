@@ -9,8 +9,8 @@ import {
   PayloadTooLargeError,
   PrintJobRepository,
 } from "../infra/printJobRepository.js";
-import { createAgent, hashToken, listAgents, revokeAgent, safeEqualString } from "../infra/tokenStore.js";
-import { agentAuth, agentOrOwnerAuth, ownerAuth, type AuthedRequest } from "../middleware/auth.js";
+import { createAgent, hashToken, listAgents, revokeAgent } from "../infra/tokenStore.js";
+import { agentAuth, agentOrOwnerAuth, isOwner, ownerAuth, type AuthedRequest } from "../middleware/auth.js";
 import type { PrintJob } from "../domain/printJob.js";
 import type { PrintProvider } from "../services/provider.js";
 import {
@@ -91,11 +91,9 @@ export function printAgentRouter(provider: PrintProvider): Router {
     return job;
   };
 
-  // Enroll — protegido por chave owner (B1: comparação constante).
+  // Enroll — dono via sessão rotativa ou chave owner (B1: comparação constante).
   r.post("/enroll", (req, res) => {
-    const setupKey = process.env.OWNER_SETUP_KEY;
-    const provided = req.header("x-setup-key") ?? "";
-    if (!setupKey || !safeEqualString(provided, setupKey)) {
+    if (!isOwner(req)) {
       res.status(403).json({ error: "forbidden" });
       return;
     }

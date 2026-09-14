@@ -19,7 +19,7 @@ const revogando = ref<Agent | null>(null)
 
 async function carregar() {
   try {
-    agents.value = (await api.agents(session.ownerKey)).agents
+    agents.value = (await api.agents()).agents
   } catch (e) {
     toast.error((e as Error).message, { description: 'Não foi possível carregar as lojas.' })
   }
@@ -28,7 +28,7 @@ async function carregar() {
 async function enroll() {
   try {
     if (!label.value.trim()) return
-    const d = await api.enroll(session.ownerKey, label.value.trim())
+    const d = await api.enroll(label.value.trim())
     session.saveToken(d.agentId, d.token)
     novoToken.value = d.token
     label.value = ''
@@ -41,7 +41,7 @@ async function enroll() {
 
 async function revogar(a: Agent) {
   try {
-    await api.revokeAgent(session.ownerKey, a.id)
+    await api.revokeAgent(a.id)
     session.forgetToken(a.id)
     toast.success('Acesso revogado', { description: `O agente da loja ${a.label} parou de funcionar.` })
     await carregar()

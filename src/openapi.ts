@@ -98,10 +98,31 @@ export const openApiDocument = {
     "/app/admin": {
       get: { summary: "Painel do dono (HTML, login com x-setup-key na página)", responses: { "200": { description: "página HTML" } } },
     },
+    "/auth/login": {
+      post: {
+        summary: "Login persistente (access 15min + refresh 30d rotativo)",
+        requestBody: { content: { "application/json": { schema: { type: "object", properties: { setupKey: { type: "string" } } } } } },
+        responses: { "200": { description: "{ session, tokenType }" }, "403": { description: "forbidden" } },
+      },
+    },
+    "/auth/refresh": {
+      post: {
+        summary: "Rotaciona o par (refresh antigo morre; reuso derruba a cadeia)",
+        requestBody: { content: { "application/json": { schema: { type: "object", properties: { refreshToken: { type: "string" } } } } } },
+        responses: { "200": { description: "{ session, tokenType }" }, "403": { description: "inválido/expirado" } },
+      },
+    },
+    "/auth/logout": {
+      post: {
+        summary: "Revoga a sessão",
+        requestBody: { content: { "application/json": { schema: { type: "object", properties: { refreshToken: { type: "string" } } } } } },
+        responses: { "204": { description: "revogado" } },
+      },
+    },
     "/print-agent/enroll": {
       post: {
-        summary: "Gera token da loja",
-        security: [{ setupKey: [] }],
+        summary: "Gera token da loja (sessão owner ou setup key)",
+        security: [{ bearer: [] }, { setupKey: [] }],
         requestBody: { content: { "application/json": { schema: { type: "object", properties: { label: { type: "string" } } } } } },
         responses: { "201": { description: "agentId + token (guarde — não é recuperável)" }, "403": { description: "setup key inválida" } },
       },

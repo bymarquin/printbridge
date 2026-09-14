@@ -12,9 +12,9 @@ const totalLojas = ref(0)
 async function carregar() {
   try {
     const [p, j, a] = await Promise.all([
-      api.printersAll(session.ownerKey),
-      api.recentJobs(session.ownerKey, 50),
-      api.agents(session.ownerKey),
+      api.printersAll(),
+      api.recentJobs(50),
+      api.agents(),
     ])
     printers.value = p.printers
     jobs.value = j.jobs
