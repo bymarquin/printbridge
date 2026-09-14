@@ -2,9 +2,11 @@
 </script>
 
 <template>
-  <table class="w-full text-sm">
-    <slot />
-  </table>
+  <div class="overflow-x-auto">
+    <table class="w-full min-w-[560px] text-sm">
+      <slot />
+    </table>
+  </div>
 </template>
 
 <style scoped>
