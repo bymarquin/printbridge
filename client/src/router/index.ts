@@ -20,6 +20,10 @@ const router = createRouter({
           meta: { title: 'Lojas', subtitle: 'Cadastre e gerencie os estabelecimentos.' },
         },
         {
+          path: 'conexoes', name: 'conexoes', component: () => import('../views/ConexoesView.vue'),
+          meta: { title: 'Conexões', subtitle: 'Agentes online e pareamento.' },
+        },
+        {
           path: 'impressoras', name: 'impressoras', component: () => import('../views/ImpressorasView.vue'),
           meta: { title: 'Impressoras', subtitle: 'Status por loja.' },
         },

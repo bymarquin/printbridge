@@ -3,7 +3,7 @@ import { computed } from 'vue'
 
 const props = defineProps<{ status: string }>()
 const cls = computed(() =>
-  props.status === 'completed' || props.status === 'ready'
+  props.status === 'completed' || props.status === 'ready' || props.status === 'online'
     ? 'bg-emerald-950 text-emerald-300'
     : props.status === 'failed' || props.status === 'offline'
       ? 'bg-red-950 text-red-300'

@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { configureAutostart } from "../src/shell/autostart.js";
 import { buildTray } from "../src/shell/tray.js";
+import { buildConnectionHtml, openConnectionWindow } from "../src/shell/connectionWindow.js";
 import { createDiagnoseWindow } from "../src/shell/diagnoseWindow.js";
 import { checkForUpdates, wireAutoInstall } from "../src/shell/updater.js";
 import { LocalQueue } from "../src/infra/localQueue.js";
@@ -35,13 +36,14 @@ describe("shell", () => {
     const Menu = { buildFromTemplate: (t: typeof template) => { template = t; return { template: t }; } };
     const log = { info: vi.fn(), error: vi.fn() };
     let status = "iniciando…";
-    const cb = { getStatus: () => status, onOpenLogs: vi.fn(), onCheckUpdates: vi.fn(), onQuit: vi.fn() };
+    const cb = { getStatus: () => status, onOpenLogs: vi.fn(), onCheckUpdates: vi.fn(), onConnection: vi.fn(), onQuit: vi.fn() };
     const handle = buildTray(FakeTray as never, Menu, "icon.ico", "0.1.0", cb, log);
     expect(instances[0].tooltip).toContain("0.1.0");
     expect(instances[0].tooltip).toContain("iniciando");
     status = "ok";
     handle.refresh();
     expect(instances[0].tooltip).toContain("ok");
+    expect((template.map((i) => i.label) as string[])).toContain("Conexão…");
     const labels = template.map((i) => i.label);
     expect(labels).toContain("Abrir pasta de logs");
     expect(labels).toContain("Verificar atualizações");
@@ -117,6 +119,26 @@ describe("shell", () => {
     await diag.fail("Parou aqui:\nboom");
     expect(calls.some((c) => c.includes("token presente"))).toBe(true);
     expect(calls.some((c) => c.includes("Parou aqui"))).toBe(true);
+  });
+
+  it("janela Conexão mostra status e troca de loja", async () => {
+    const html = buildConnectionHtml({ configPath: "/tmp/c.json", apiUrl: "https://x" });
+    expect(html).toContain("Trocar de loja / servidor");
+    expect(html).toContain("/print-agent/printers");
+    let loaded = "";
+    class FakeBW {
+      webContents = {
+        on: () => {},
+        setWindowOpenHandler: (_fn: () => { action: "deny" }) => {},
+      };
+      async loadURL(url: string) { loaded = url; }
+      on() {}
+      close() {}
+      isDestroyed() { return false; }
+    }
+    openConnectionWindow({ BrowserWindow: FakeBW }, { configPath: "/tmp/c.json", apiUrl: "https://x" });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(loaded.startsWith("data:text/html")).toBe(true);
   });
 
   it("logger fallback escreve em arquivo com rotação", () => {

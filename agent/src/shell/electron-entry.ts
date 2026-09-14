@@ -9,6 +9,7 @@ import { createLogger, type Logger } from "../infra/logger.js";
 import { startAgent, type AgentRuntime } from "../index.js";
 import { configureAutostart } from "./autostart.js";
 import { createDiagnoseWindow, type DiagnoseHandle } from "./diagnoseWindow.js";
+import { openConnectionWindow } from "./connectionWindow.js";
 import { openSetupWindow } from "./setupWindow.js";
 import { buildTray } from "./tray.js";
 import { checkForUpdates, wireAutoInstall, type UpdaterLike } from "./updater.js";
@@ -90,6 +91,8 @@ async function boot(): Promise<void> {
         getStatus: () => (runtime.lastTickAt() ? `ok (tick ${runtime.lastTickAt()})` : "iniciando…"),
         onOpenLogs: () => shell.showItemInFolder(logDir()),
         onCheckUpdates: () => void checkForUpdates(loadUpdater(), log),
+        onConnection: () =>
+          openConnectionWindow({ BrowserWindow }, { configPath: configFilePath(), apiUrl: cfg.apiBaseUrl }),
         onQuit: () => shutdown(runtime, handle.tray.destroy.bind(handle.tray)),
       },
       log,
@@ -173,12 +176,12 @@ class SetupCancelled extends Error {
   }
 }
 
-/** Se o token mudar no disco (reconfiguração), relança para aplicar. */
+/** Se o token mudar OU sumir no disco (troca pela janela Conexão), relança. */
 function watchConfigToken(initialToken: string, log: Logger): void {
   const file = configFilePath();
   setInterval(() => {
-    const current = loadFileConfig(file)?.token;
-    if (current && current !== initialToken) {
+    const current = loadFileConfig(file)?.token ?? "";
+    if (current !== initialToken) {
       log.info("config alterada — relançando agente");
       app.relaunch();
       app.quit();

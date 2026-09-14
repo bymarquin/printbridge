@@ -1,6 +1,6 @@
 {
   "name": "@printbridge/agent",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "private": true,
   "description": "PrintBridge Agent (Windows) — core headless desacoplado do Electron",
   "type": "module",

@@ -5,6 +5,7 @@ export interface TrayCallbacks {
   getStatus: () => string;
   onOpenLogs: () => void;
   onCheckUpdates: () => void;
+  onConnection: () => void;
   onQuit: () => void;
 }
 
@@ -37,6 +38,7 @@ export function buildTray(
           { label: `Status: ${cb.getStatus()}`, enabled: false },
           { type: "separator" },
           { label: "Abrir pasta de logs", click: cb.onOpenLogs },
+          { label: "Conexão…", click: cb.onConnection },
           { label: "Verificar atualizações", click: cb.onCheckUpdates },
           { type: "separator" },
           { label: "Sair", click: cb.onQuit },
