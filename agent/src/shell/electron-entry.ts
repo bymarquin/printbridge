@@ -81,7 +81,20 @@ async function boot(): Promise<void> {
 
     // Reconfiguração pelo assistente: token trocado no arquivo => relança.
     watchConfigToken(cfg.token, log);
-    wireAutoInstall(loadUpdater(), log, () => runtime.isIdle());
+    const updater = loadUpdater();
+    wireAutoInstall(updater, log, () => runtime.isIdle());
+    // Escuta de atualização: 1min após boot + a cada 6h; avisa na bandeja.
+    const checkUpdates = () =>
+      checkForUpdates(updater, log).then((r) => {
+        if (r === "downloaded") {
+          handle.tray.displayBalloon?.({
+            title: "PrintBridge atualizado",
+            content: "Nova versão baixada — será aplicada ao fechar.",
+          });
+        }
+      }).catch((e) => log.error("check inicial de update", e));
+    setTimeout(() => void checkUpdates(), 60_000);
+    setInterval(() => void checkUpdates(), 6 * 3600_000);
     log.info(`agente iniciado v${appVersion(app)}`);
   } catch (e) {
     // Boot sem tray: nunca falha silencioso — log + diálogo + quit.
