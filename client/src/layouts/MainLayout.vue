@@ -1,15 +1,10 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { BookOpen, LayoutDashboard, ListOrdered, LogOut, Plug, Printer, Store } from 'lucide-vue-next'
-import { useRoute, useRouter } from 'vue-router'
+import { BookOpen, LayoutDashboard, ListOrdered, Plug, Printer, Store } from 'lucide-vue-next'
+import { useRoute } from 'vue-router'
 import logoHorizontal from '../assets/images/logo-horizontal.png'
-import { api } from '../lib/api'
-import { useSession } from '../stores/session'
+import ProfileMenu from '../components/ProfileMenu.vue'
 
 const route = useRoute()
-const router = useRouter()
-const session = useSession()
-const menuAberto = ref(false)
 
 const links = [
   { name: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -19,37 +14,16 @@ const links = [
   { name: 'integracoes', label: 'Integrações', icon: Plug },
   { name: 'docs', label: 'Docs', icon: BookOpen },
 ] as const
-
-function sair() {
-  menuAberto.value = false
-  const refresh = session.refreshToken
-  session.clear()
-  if (refresh) void api.logout(refresh).catch(() => {})
-  void router.push({ name: 'login' })
-}
 </script>
 
 <template>
   <div class="min-h-screen bg-zinc-950 text-zinc-100">
     <div class="mx-auto max-w-6xl px-4 pb-10">
-      <button v-if="menuAberto" class="fixed inset-0 z-40 cursor-default" aria-hidden="true" @click="menuAberto = false" />
       <header class="flex items-center justify-between py-4">
         <div class="flex items-center gap-2">
           <img :src="logoHorizontal" alt="PrintBridge" class="h-9" />
         </div>
-        <div class="relative">
-          <button @click="menuAberto = !menuAberto" title="Perfil"
-            class="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-700 text-xs font-semibold text-white hover:bg-zinc-600">
-            PB
-          </button>
-          <div v-if="menuAberto" class="absolute right-0 z-50 mt-2 w-44 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900 shadow-2xl">
-            <p class="border-b border-zinc-800 px-3 py-2 text-xs text-zinc-400">Dono</p>
-            <button @click="sair"
-              class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800">
-              <LogOut :size="16" /> Sair
-            </button>
-          </div>
-        </div>
+        <ProfileMenu />
       </header>
 
       <nav class="flex items-center justify-center gap-2 overflow-x-auto rounded-xl bg-zinc-900 px-4 py-3">

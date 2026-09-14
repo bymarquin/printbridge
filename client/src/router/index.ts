@@ -7,7 +7,7 @@ const router = createRouter({
     { path: '/', redirect: { name: 'dashboard' } },
     {
       path: '/app',
-      component: () => import('../layouts/MainLayout.vue'),
+      component: () => import('../layouts/RootLayout.vue'),
       meta: { auth: true },
       children: [
         { path: '', redirect: { name: 'dashboard' } },
